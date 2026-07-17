@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LOOB — Local Transcription Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink: #17140F;
+    --parchment: #F3ECDD;
+    --parchment-dim: #C9BFA8;
+    --ember: #B8632E;
+    --ember-soft: rgba(184,99,46,0.18);
+    --teal: #33505A;
+    --teal-soft: rgba(51,80,90,0.25);
+    --line: rgba(243,236,221,0.12);
+    --ok: #7FA37A;
+    --warn: #D6A24C;
+  }
+  *{ box-sizing: border-box; }
+  html,body{
+    margin:0; padding:0;
+    background: radial-gradient(120% 140% at 15% -10%, #241f18 0%, var(--ink) 55%);
+    color: var(--parchment);
+    font-family: 'Inter', sans-serif;
+    min-height:100vh;
+  }
+  .wrap{
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 56px 24px 80px;
+  }
+  .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    color: var(--ember);
+    margin-bottom:14px;
+  }
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight:500;
+    font-size: clamp(32px, 5vw, 46px);
+    line-height:1.08;
+    margin: 0 0 14px;
+    color: var(--parchment);
+  }
+  .lede{
+    font-size:15.5px;
+    line-height:1.6;
+    color: var(--parchment-dim);
+    max-width: 58ch;
+    margin: 0 0 40px;
+  }
+  .lede b{ color: var(--parchment); font-weight:500; }
+
+  .panel{
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 24px;
+    margin-bottom: 20px;
+    background: rgba(243,236,221,0.02);
+  }
+  .panel-title{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color: var(--parchment-dim);
+    margin: 0 0 16px;
+  }
+
+  /* status / model load */
+  .status-row{ display:flex; align-items:center; gap:12px; }
+  .dot{ width:8px; height:8px; border-radius:50%; background: var(--parchment-dim); flex-shrink:0; }
+  .dot.loading{ background: var(--warn); animation: pulse 1.4s ease-in-out infinite; }
+  .dot.ready{ background: var(--ok); }
+  .dot.busy{ background: var(--ember); animation: pulse 1.1s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+  .status-text{ font-size:13.5px; color: var(--parchment-dim); }
+  .progress-track{
+    margin-top:12px; height:3px; width:100%;
+    background: rgba(243,236,221,0.08); border-radius: 2px; overflow:hidden;
+  }
+  .progress-fill{
+    height:100%; width:0%; background: var(--ember);
+    transition: width 0.25s ease;
+  }
+
+  /* controls */
+  .controls-grid{ display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  label{
+    font-family:'JetBrains Mono', monospace;
+    font-size:10.5px; letter-spacing:0.08em; text-transform:uppercase;
+    color: var(--parchment-dim);
+  }
+  select, input[type=file]{
+    background: rgba(0,0,0,0.25);
+    border:1px solid var(--line);
+    color: var(--parchment);
+    padding: 9px 10px;
+    border-radius:3px;
+    font-family:'Inter',sans-serif;
+    font-size:13.5px;
+    max-width: 240px;
+  }
+  select:focus, input:focus, button:focus{
+    outline: 2px solid var(--ember); outline-offset:2px;
+  }
+  button{
+    font-family:'Inter', sans-serif;
+    font-weight:500;
+    font-size:13.5px;
+    padding: 10px 18px;
+    border-radius:3px;
+    border: 1px solid transparent;
+    cursor:pointer;
+    transition: all 0.15s ease;
+  }
+  button.primary{
+    background: var(--ember); color: #1B1310; border-color: var(--ember);
+  }
+  button.primary:hover{ background:#c8712f; }
+  button.ghost{
+    background: transparent; color: var(--parchment); border-color: var(--line);
+  }
+  button.ghost:hover{ border-color: var(--parchment-dim); }
+  button.record{
+    background: var(--teal-soft); color: var(--parchment); border-color: var(--teal);
+  }
+  button.record.active{
+    background: rgba(184,99,46,0.22); border-color: var(--ember); color: var(--ember);
+  }
+  button:disabled{ opacity:0.4; cursor:not-allowed; }
+
+  .rec-timer{
+    font-family:'JetBrains Mono', monospace; font-size:13px; color: var(--parchment-dim);
+    min-width:52px;
+  }
+
+  /* transcript */
+  .transcript-box{
+    min-height: 160px;
+    background: rgba(0,0,0,0.22);
+    border:1px solid var(--line);
+    border-radius:3px;
+    padding:18px;
+    font-family:'Fraunces', serif;
+    font-size:16.5px;
+    line-height:1.65;
+    color: var(--parchment);
+    white-space: pre-wrap;
+  }
+  .transcript-box:empty::before{
+    content: "Transcript will gather here as audio is processed.";
+    color: var(--parchment-dim);
+    font-family:'Inter', sans-serif;
+    font-size:14px;
+  }
+  .chunk-progress{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11.5px;
+    color: var(--parchment-dim);
+    margin-top:10px;
+  }
+
+  .footnote{
+    font-size:12.5px;
+    line-height:1.6;
+    color: var(--parchment-dim);
+    border-top: 1px solid var(--line);
+    padding-top:18px;
+    margin-top:8px;
+  }
+  .footnote strong{ color: var(--parchment); }
+
+  a{ color: var(--ember); }
+
+  .actions-row{ display:flex; gap:10px; margin-top:16px; }
+
+  @media (prefers-reduced-motion: reduce){
+    .dot.loading, .dot.busy{ animation:none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">LOOB · engineering prototype</div>
+  <h1>A transcript with no clock on it.</h1>
+  <p class="lede">
+    This runs Whisper small entirely in your browser tab. <b>No server, no upload</b> —
+    audio is decoded and transcribed on this device, in any of the ~99 languages
+    Whisper small was trained on, for recordings of any length.
+  </p>
+
+  <div class="panel">
+    <p class="panel-title">Model status</p>
+    <div class="status-row">
+      <div class="dot" id="statusDot"></div>
+      <div class="status-text" id="statusText">Not loaded yet — press "Load model" to begin.</div>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="actions-row">
+      <button class="primary" id="loadModelBtn">Load model</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">Source audio</p>
+    <div class="controls-grid">
+      <div class="field">
+        <label for="langSelect">Primary language</label>
+        <select id="langSelect"></select>
+      </div>
+      <div class="field">
+        <label for="langSelect2">Also expect (for code-switching)</label>
+        <select id="langSelect2"></select>
+      </div>
+      <div class="field">
+        <label for="fileInput">Upload a file</label>
+        <input type="file" id="fileInput" accept="audio/*,video/webm">
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <button class="record" id="recordBtn" disabled>● Record</button>
+          <span class="rec-timer" id="recTimer">00:00</span>
+        </div>
+      </div>
+    </div>
+    <p style="font-size:11.5px; color: var(--parchment-dim); margin: 10px 0 0;">
+      Blind "detect any of 99 languages" turned out to be unreliable in this browser environment —
+      every unconstrained pass Whisper offers can silently mistranslate instead of transcribing, with
+      no dependable way from here to tell when it has. What does work reliably: naming the language
+      explicitly. If your recording switches between two languages, set both here — each ~15s window
+      is tried against both explicitly and whichever result actually matches its target language's
+      words or script is kept, roughly doubling processing time in exchange for actually being
+      trustworthy.
+    </p>
+    <div class="chunk-progress" id="chunkProgress"></div>
+  </div>
+
+
+  <div class="panel">
+    <p class="panel-title">Transcript</p>
+    <div class="transcript-box" id="transcriptBox"></div>
+    <div class="chunk-progress" id="wordCount"></div>
+    <div class="actions-row">
+      <button class="ghost" id="copyBtn">Copy transcript</button>
+      <button class="ghost" id="clearBtn">Clear</button>
+    </div>
+  </div>
+
+  <details class="panel" open>
+    <summary class="panel-title" style="cursor:pointer;">Debug log (per-chunk language/task detail) — open by default, copy this if translation happens again</summary>
+    <pre id="debugLog" style="font-family:'JetBrains Mono', monospace; font-size:11.5px; color: var(--parchment-dim); white-space:pre-wrap; margin-top:12px;"></pre>
+    <div class="actions-row">
+      <button class="ghost" id="copyDebugBtn">Copy debug log</button>
+    </div>
+  </details>
+
+  <p class="footnote">
+    <strong>How this stays local-first:</strong> the model weights (~250&nbsp;MB, one-time) are
+    fetched from Hugging Face's CDN the first time you load the model, then cached by the browser
+    for offline reuse. From that point on — and for every recording you make — nothing leaves this
+    tab: audio is read, chunked, and transcribed in-memory on your device.<br><br>
+    <strong>Known limits of this prototype:</strong> recordings over 15s are split into 15s windows
+    with 3s overlap, so the model's 30-second context limit never truncates a long recording. Getting
+    reliable language handling took several rounds of direct testing before landing here, worth being
+    upfront about: this pipeline never exposes a detected-language field through its API at all, and
+    forcing <code>task: "transcribe"</code> without also pinning down an explicit language turned out
+    to be unreliable on its own — it would sometimes translate to English silently, with no way from
+    the outside to tell when it had, confirmed by a "sample" pass coming back as a fully fluent
+    English translation of what was actually French. The only combination confirmed reliable, twice
+    over, is language and task forced together explicitly. So this prototype no longer attempts blind
+    auto-detection across all 99 languages — that's a real capability gap worth knowing about, not
+    a hidden one. Instead, "Also expect" lets you name a second language a recording is expected to
+    switch into; when set, every ~15s window is transcribed once per candidate language, explicitly,
+    and whichever result actually matches its own target language — by Unicode script for languages
+    like Tamil and Hindi, by stopword frequency for Latin-script languages like French, English, and
+    Tagalog — is kept. This means hybrid mode always costs twice the compute of single-language mode,
+    since both candidates genuinely run every window regardless of which one turns out to be right.
+    It also can't recover a language from Whisper's own hallucinated, phonetically-transliterated
+    output (seen once in testing, where a Tamil section came out as repeated nonsense Latin-letter
+    syllables) — no scoring scheme fixes text that was never real to begin with. A generation length
+    cap is applied per chunk for that same hallucination case, since the repetition penalty alone
+    didn't fully stop it from looping a single word hundreds of times — the cap won't prevent that
+    failure mode outright, but it bounds how much damage one bad chunk can do to the rest of the
+    transcript. A small silence pad is added to the true end of longer recordings, capped to whatever
+    headroom is left in the last 15s window so it can never spill into creating an extra, near-silent
+    final chunk — an earlier version of this padding used a fixed amount and occasionally did exactly
+    that, which demoted the chunk holding the real final words out of "last chunk" status and got its
+    tail trimmed as if it were a middle chunk. When a language switch is detected, it's marked inline
+    as <code>⟨→ Language⟩</code>. None of this catches a switch that happens faster than about 15
+    seconds, including mid-sentence code-switching, or a third language beyond the two candidates
+    picked — those are hard limits of this approach, not settings to tune away. Shorter windows also
+    make Whisper's known repetition/hallucination failure mode — getting stuck looping a phrase,
+    usually on a quiet stretch — somewhat more likely, since a short pause now makes up more of a 15s
+    window than it would have of a 30s one; a repetition penalty and a no-repeat-ngram constraint are
+    applied during generation to push back on it, though this is a mitigation rather than a
+    guarantee. There's no speaker diarization here — that's a separate stage in the fuller
+    blueprint. Performance depends on your device; a laptop with WebGPU support will be noticeably
+    faster than CPU-only WASM, and very long recordings will simply take longer rather than failing.
+  </p>
+
+</div>
+
+<script type="module">
+import { pipeline, env } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1";
+
+env.allowLocalModels = false;
+
+// --- Whisper's supported languages (code: display name) ---
+const WHISPER_LANGUAGES = {
+  auto: "None (single language only)", en: "English", zh: "Chinese", de: "German", es: "Spanish",
+  ru: "Russian", ko: "Korean", fr: "French", ja: "Japanese", pt: "Portuguese",
+  tr: "Turkish", pl: "Polish", ca: "Catalan", nl: "Dutch", ar: "Arabic",
+  sv: "Swedish", it: "Italian", id: "Indonesian", hi: "Hindi", fi: "Finnish",
+  vi: "Vietnamese", he: "Hebrew", uk: "Ukrainian", el: "Greek", ms: "Malay",
+  cs: "Czech", ro: "Romanian", da: "Danish", hu: "Hungarian", ta: "Tamil",
+  no: "Norwegian", th: "Thai", ur: "Urdu", hr: "Croatian", bg: "Bulgarian",
+  lt: "Lithuanian", la: "Latin", mi: "Maori", ml: "Malayalam", cy: "Welsh",
+  sk: "Slovak", te: "Telugu", fa: "Persian", lv: "Latvian", bn: "Bengali",
+  sr: "Serbian", az: "Azerbaijani", sl: "Slovenian", kn: "Kannada", et: "Estonian",
+  mk: "Macedonian", br: "Breton", eu: "Basque", is: "Icelandic", hy: "Armenian",
+  ne: "Nepali", mn: "Mongolian", bs: "Bosnian", kk: "Kazakh", sq: "Albanian",
+  sw: "Swahili", gl: "Galician", mr: "Marathi", pa: "Punjabi", si: "Sinhala",
+  km: "Khmer", sn: "Shona", yo: "Yoruba", so: "Somali", af: "Afrikaans",
+  oc: "Occitan", ka: "Georgian", be: "Belarusian", tg: "Tajik", sd: "Sindhi",
+  gu: "Gujarati", am: "Amharic", yi: "Yiddish", lo: "Lao", uz: "Uzbek",
+  fo: "Faroese", ht: "Haitian Creole", ps: "Pashto", tk: "Turkmen",
+  nn: "Nynorsk", mt: "Maltese", sa: "Sanskrit", lb: "Luxembourgish",
+  my: "Myanmar", bo: "Tibetan", tl: "Tagalog", mg: "Malagasy", as: "Assamese",
+  tt: "Tatar", haw: "Hawaiian", ln: "Lingala", ha: "Hausa", ba: "Bashkir",
+  jw: "Javanese", su: "Sundanese", yue: "Cantonese"
+};
+
+const $ = (id) => document.getElementById(id);
+const statusDot = $("statusDot"), statusText = $("statusText"), progressFill = $("progressFill");
+const loadModelBtn = $("loadModelBtn"), langSelect = $("langSelect"), langSelect2 = $("langSelect2");
+const fileInput = $("fileInput"), recordBtn = $("recordBtn"), recTimer = $("recTimer");
+const transcriptBox = $("transcriptBox"), chunkProgress = $("chunkProgress");
+const wordCount = $("wordCount");
+const debugLog = $("debugLog");
+const copyDebugBtn = $("copyDebugBtn");
+const copyBtn = $("copyBtn"), clearBtn = $("clearBtn");
+
+function logDebug(msg) {
+  console.log(msg);
+  debugLog.textContent += msg + "\n";
+}
+
+// Single place that writes to the transcript box, so the word/character
+// count next to it can never drift out of sync with what's displayed —
+// useful for confirming growth independent of eyeballing the box itself.
+function updateTranscript(text) {
+  transcriptBox.textContent = text;
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  wordCount.textContent = text ? `${words} words · ${text.length} characters` : "";
+}
+
+for (const [code, name] of Object.entries(WHISPER_LANGUAGES)) {
+  if (code !== "auto") {
+    const opt = document.createElement("option");
+    opt.value = code; opt.textContent = name;
+    langSelect.appendChild(opt);
+  }
+  const opt2 = document.createElement("option");
+  opt2.value = code; opt2.textContent = name;
+  langSelect2.appendChild(opt2);
+}
+langSelect.value = "en";
+langSelect2.value = "auto"; // "None (single language only)"
+
+let transcriber = null;
+let audioCtx = null;
+
+function setStatus(kind, text) {
+  statusDot.className = "dot" + (kind ? " " + kind : "");
+  statusText.textContent = text;
+}
+
+loadModelBtn.addEventListener("click", async () => {
+  loadModelBtn.disabled = true;
+  setStatus("loading", "Downloading and initializing Whisper small…");
+  try {
+    const device = navigator.gpu ? "webgpu" : "wasm";
+    transcriber = await pipeline(
+      "automatic-speech-recognition",
+      "onnx-community/whisper-small",
+      {
+        device,
+        dtype: device === "webgpu" ? "fp32" : "q8",
+        progress_callback: (p) => {
+          if (p.status === "progress" && p.total) {
+            const pct = Math.round((p.loaded / p.total) * 100);
+            progressFill.style.width = pct + "%";
+            setStatus("loading", `Fetching ${p.file || "model files"} — ${pct}%`);
+          }
+        }
+      }
+    );
+    progressFill.style.width = "100%";
+    setStatus("ready", `Ready — running on ${device.toUpperCase()}.`);
+    recordBtn.disabled = false;
+  } catch (err) {
+    console.error(err);
+    setStatus(null, "Model failed to load: " + err.message);
+    loadModelBtn.disabled = false;
+  }
+});
+
+// --- audio decoding / resampling to 16kHz mono Float32 ---
+async function ensureAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+// Renders any AudioBuffer down to 16kHz mono Float32 samples. Used for both
+// the "decode an uploaded file" path and the "resample raw mic PCM" path, so
+// there is exactly one place doing this conversion.
+async function renderBufferTo16k(audioBuffer) {
+  const targetLength = Math.ceil(audioBuffer.duration * 16000);
+  const offline = new OfflineAudioContext(1, targetLength, 16000);
+  const src = offline.createBufferSource();
+  src.buffer = audioBuffer;
+  src.connect(offline.destination);
+  src.start(0);
+  const rendered = await offline.startRendering();
+  return rendered.getChannelData(0);
+}
+
+async function decodeFileTo16k(arrayBuffer) {
+  const ctx = await ensureAudioCtx();
+  const decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
+  return renderBufferTo16k(decoded);
+}
+
+// --- chunk long audio so there is no effective time limit ---
+// Chunks are deliberately short (15s) with modest overlap (3s): Whisper
+// decides on one language token at the start of each generate() call and
+// can't switch language mid-call, so the only way to catch a language
+// switch at all is to re-run detection more often. This does NOT catch a
+// switch that happens mid-sentence or faster than the chunk size — that's
+// a hard limit of how Whisper decodes, not a setting — but it's far more
+// responsive to genuine code-switching than a single 30s window.
+function chunkAudio(float32, sampleRate = 16000, chunkS = 15, strideS = 3) {
+  const chunkSize = chunkS * sampleRate;
+  const strideSize = strideS * sampleRate;
+  const step = chunkSize - strideSize;
+  const chunks = [];
+  if (float32.length <= chunkSize) return [float32];
+  for (let start = 0; start < float32.length; start += step) {
+    const end = Math.min(start + chunkSize, float32.length);
+    chunks.push(float32.slice(start, end));
+    if (end >= float32.length) break;
+  }
+  return chunks;
+}
+
+// Each chunk gets its own independent transcriber() call, so each one
+// re-detects language rather than inheriting a single guess for the whole
+// recording (which is what the pipeline's built-in chunk_length_s does —
+// convenient, but wrong for hybrid-language audio). Segment-level timestamps
+// (not word-level — see earlier note on cross-attention export support)
+// are used to keep only each chunk's trusted middle window, so overlap
+// doesn't get transcribed twice. A chunk that throws is marked inline and
+// skipped rather than aborting everything after it, and the whole recording
+// gets a trailing-silence pad first so the true final sentence doesn't sit
+// on the last chunk's trim boundary.
+async function transcribeFloat32(rawFloat32) {
+  if (!transcriber) { setStatus(null, "Load the model first."); return; }
+  const durationS = rawFloat32.length / 16000;
+  setStatus("busy", `Transcribing ${Math.round(durationS)}s of audio…`);
+  debugLog.textContent = "";
+
+  const sampleRate = 16000;
+  const chunkS = 15, strideS = 3;
+  const chunkSizeSamples = chunkS * sampleRate;
+
+  // Figure out the natural chunk boundaries on the untouched recording
+  // first, so we know exactly how much headroom the real last chunk has
+  // before it hits the 15s cap. Padding beyond that headroom would spill
+  // into a brand-new, almost-entirely-silent trailing chunk — which then
+  // gets treated as "the last chunk" instead, demoting the chunk that
+  // actually holds the real final words to a middle chunk whose tail gets
+  // trimmed after all. Capping the pad to the available headroom means
+  // padding can never change how many chunks there are.
+  const rawChunks = chunkAudio(rawFloat32, sampleRate, chunkS, strideS);
+  const lastRawChunkLen = rawChunks[rawChunks.length - 1].length;
+  const headroomSamples = chunkSizeSamples - lastRawChunkLen;
+
+  let float32 = rawFloat32;
+  if (rawFloat32.length > chunkSizeSamples && headroomSamples > 0) {
+    const desiredPadSamples = Math.ceil((strideS + 1) * sampleRate);
+    const padSamples = Math.min(desiredPadSamples, headroomSamples);
+    const padded = new Float32Array(rawFloat32.length + padSamples); // zero-filled
+    padded.set(rawFloat32, 0);
+    float32 = padded;
+  }
+
+  const chunks = chunkAudio(float32, sampleRate, chunkS, strideS);
+  if (chunks.length !== rawChunks.length) {
+    // Should be structurally impossible given the headroom cap above, but
+    // logged rather than assumed — if this ever fires, the cap itself has a
+    // bug and the last chunk's classification can no longer be trusted.
+    console.warn(
+      `Padding changed chunk count (${rawChunks.length} -> ${chunks.length}) — ` +
+      `the last-chunk headroom cap did not behave as expected.`
+    );
+  }
+  const primaryLang = langSelect.value;
+  const secondaryLang = langSelect2.value; // "auto" here means "None" — see relabeled option
+  const hybridMode = secondaryLang !== "auto";
+  const keptSegments = [];
+  let lastDetectedLang = null;
+  let failedChunks = 0;
+  let usedFallback = false;
+
+  // Every previous attempt at this (top-level options, generate_kwargs,
+  // forced_decoder_ids, then detecting language from an "unconstrained"
+  // sample pass) ran into the same wall: any pass that doesn't explicitly
+  // pin down a language is unreliable in this pipeline and can silently
+  // translate instead of transcribing, with no trustworthy way to tell from
+  // the outside when it has — confirmed directly in testing, where a fully
+  // fluent English "sample" turned out to already be a mistranslated French
+  // sentence. The only combination confirmed reliable, twice, by direct
+  // testing is language + task set together explicitly. So hybrid mode no
+  // longer tries to detect a language at all: it runs each ~15s window
+  // through BOTH candidate languages explicitly, and keeps whichever result
+  // actually looks like its own target language.
+  const SCRIPT_RANGES = [
+    { code: "hi", regex: /[\u0900-\u097F]/ },
+    { code: "ta", regex: /[\u0B80-\u0BFF]/ },
+    { code: "ar", regex: /[\u0600-\u06FF]/ },
+    { code: "zh", regex: /[\u4E00-\u9FFF]/ },
+    { code: "ru", regex: /[\u0400-\u04FF]/ },
+    { code: "ko", regex: /[\uAC00-\uD7AF]/ },
+    { code: "ja", regex: /[\u3040-\u30FF]/ },
+    { code: "th", regex: /[\u0E00-\u0E7F]/ },
+  ];
+  const STOPWORDS = {
+    en: ["the", "is", "and", "of", "to", "in", "a", "that", "it", "for", "on", "with", "this", "was", "as"],
+    fr: ["le", "la", "de", "et", "les", "des", "en", "un", "une", "est", "que", "pour", "dans", "sur", "avec"],
+    tl: ["ang", "ng", "sa", "at", "ay", "mga", "na", "ko", "ka", "mo", "hindi", "para", "kay", "ito", "yan"],
+    es: ["el", "la", "de", "que", "y", "en", "un", "una", "es", "por", "con", "los", "las", "para"],
+    de: ["der", "die", "das", "und", "ist", "zu", "den", "von", "mit", "auf", "für", "nicht", "ein"],
+    it: ["il", "la", "di", "che", "e", "un", "una", "per", "con", "sono", "non", "questo"],
+    pt: ["o", "a", "de", "que", "e", "do", "da", "em", "um", "uma", "para", "com", "não"],
+  };
+  // Scores how well a piece of text matches its OWN claimed language — used
+  // to pick between two explicit-language passes of the same audio, not to
+  // detect a language from scratch. Script languages get a large fixed bonus
+  // if any of their script appears at all, since forcing that language token
+  // biases the decoder's vocabulary toward its native script even when the
+  // audio doesn't match, giving a reasonably clean signal either way.
+  // Stopword languages are scored as a match ratio so two Latin-script
+  // candidates (e.g. English vs French) compare on the same scale.
+  function scoreTextForLanguage(text, code) {
+    const scriptEntry = SCRIPT_RANGES.find((s) => s.code === code);
+    if (scriptEntry) {
+      const matches = text.match(new RegExp(scriptEntry.regex.source, "g")) || [];
+      return matches.length > 0 ? 1000 + matches.length : 0;
+    }
+    const list = STOPWORDS[code];
+    if (!list) return 0; // no scoring data for this language — can't judge, treat neutrally
+    const words = text.toLowerCase().replace(/[.,!?;:"'()]/g, "").split(/\s+/).filter(Boolean);
+    if (words.length === 0) return 0;
+    const matches = words.filter((w) => list.includes(w)).length;
+    return (matches / words.length) * 100;
+  }
+
+  async function transcribeWithLanguage(chunkAudioData, languageCode, genKwargsBase) {
+    return transcriber(chunkAudioData, {
+      return_timestamps: true,
+      language: languageCode,
+      task: "transcribe",
+      generate_kwargs: { ...genKwargsBase, language: languageCode, task: "transcribe" },
+    });
+  }
+
+  for (let i = 0; i < chunks.length; i++) {
+    chunkProgress.textContent = `Processing chunk ${i + 1} of ${chunks.length}…`;
+    // Shared generation settings: no_repeat_ngram_size and repetition_penalty
+    // mitigate Whisper's known repetition/hallucination failure mode (getting
+    // stuck looping a phrase) — more likely with 15s windows, since a short
+    // quiet stretch now makes up more of a chunk than it did at 30s.
+    // A 15s chunk of real speech is rarely more than ~100-150 tokens, so
+    // capping generation well above that still leaves headroom for genuine
+    // speech while bounding the damage if the model gets stuck in a
+    // repetition loop on silence or noise (as seen with the Tamil section
+    // repeating a single word hundreds of times) — repetition_penalty alone
+    // didn't fully prevent that case.
+    const genKwargsBase = { no_repeat_ngram_size: 3, repetition_penalty: 1.3, max_new_tokens: 200 };
+
+    let result;
+    let languageCode = primaryLang;
+    try {
+      if (!hybridMode) {
+        // Single fixed language — no detection needed at all, one pass.
+        result = await transcribeWithLanguage(chunks[i], primaryLang, genKwargsBase);
+      } else {
+        // Hybrid mode: try both candidates explicitly, keep whichever
+        // result actually matches its own target language.
+        const candidates = [primaryLang, secondaryLang];
+        let bestScore = -1;
+        for (const candidateLang of candidates) {
+          let candidateResult;
+          try {
+            candidateResult = await transcribeWithLanguage(chunks[i], candidateLang, genKwargsBase);
+          } catch (err) {
+            logDebug(`Chunk ${i + 1}: candidate "${candidateLang}" failed (${err.message}), skipping it.`);
+            continue;
+          }
+          const score = scoreTextForLanguage(candidateResult.text || "", candidateLang);
+          logDebug(
+            `Chunk ${i + 1}: candidate "${candidateLang}" scored ${score.toFixed(1)} -> ` +
+            `"${(candidateResult.text || "").slice(0, 50)}"`
+          );
+          if (score > bestScore) {
+            bestScore = score;
+            result = candidateResult;
+            languageCode = candidateLang;
+          }
+        }
+        if (!result) throw new Error("both candidate languages failed for this chunk");
+      }
+
+      if (hybridMode && languageCode !== lastDetectedLang) {
+        const langName = WHISPER_LANGUAGES[languageCode] || languageCode;
+        keptSegments.push(`⟨→ ${langName}⟩`);
+        lastDetectedLang = languageCode;
+      }
+    } catch (err) {
+      console.error(`Chunk ${i + 1} of ${chunks.length} failed:`, err);
+      chunkProgress.textContent =
+        `Chunk ${i + 1} of ${chunks.length} failed (${err.message}) — continuing with the next chunk.`;
+      keptSegments.push(`[chunk ${i + 1} failed: ${err.message}]`);
+      updateTranscript(keptSegments.join(" ").replace(/\s+/g, " ").trim());
+      failedChunks++;
+      continue;
+    }
+
+    const chunkDuration = chunks[i].length / sampleRate;
+    const isFirst = i === 0;
+    const isLast = i === chunks.length - 1;
+    const localStart = isFirst ? 0 : strideS / 2;
+    const localEnd = isLast ? chunkDuration : Math.max(localStart, chunkDuration - strideS / 2);
+
+    const segments = result.chunks;
+    if (Array.isArray(segments) && segments.length) {
+      for (const seg of segments) {
+        const ts = seg.timestamp || [null, null];
+        const [s, e] = ts;
+        const mid = (s != null && e != null) ? (s + e) / 2 : null;
+        if (mid === null || (mid >= localStart && mid < localEnd)) {
+          keptSegments.push(seg.text.trim());
+        }
+      }
+    } else {
+      usedFallback = true;
+      keptSegments.push(result.text.trim());
+    }
+
+    updateTranscript(keptSegments.join(" ").replace(/\s+/g, " ").trim());
+  }
+
+  if (failedChunks > 0) {
+    chunkProgress.textContent =
+      `Done — ${chunks.length} chunks, but ${failedChunks} failed and are marked inline above.`;
+  } else if (usedFallback) {
+    chunkProgress.textContent =
+      `Done — ${chunks.length} chunks (timestamps unavailable for at least one, so that boundary may repeat a phrase).`;
+  } else {
+    chunkProgress.textContent = `Done — ${Math.round(durationS)}s of audio across ${chunks.length} chunks.`;
+  }
+  setStatus("ready", "Ready.");
+}
+
+fileInput.addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    setStatus("busy", `Decoding ${file.name}…`);
+    const buf = await file.arrayBuffer();
+    const float32 = await decodeFileTo16k(buf);
+    chunkProgress.textContent = `Decoded ${formatTimer((float32.length / 16000) * 1000)} of audio from ${file.name}.`;
+    await transcribeFloat32(float32);
+  } catch (err) {
+    console.error(err);
+    setStatus(null, "Could not decode that file: " + err.message);
+  }
+});
+
+// --- microphone recording, unbounded length ---
+// Deliberately NOT using MediaRecorder + decodeAudioData here: Chrome (and
+// some other browsers) can write WebM blobs from MediaRecorder without a
+// correct duration in the container header, since the file is being built
+// live rather than finalized up front. decodeAudioData has been observed to
+// silently return a shorter buffer than what was actually recorded in that
+// case — the tail of the recording just disappears before transcription
+// ever sees it. Capturing raw PCM samples directly as they arrive sidesteps
+// that entirely: there is no compressed container to mis-decode, so nothing
+// downstream of the microphone can truncate the recording.
+let recStream = null;
+let recSourceNode = null;
+let recProcessorNode = null;
+let recSilentGain = null;
+let recPcmChunks = [];
+let recording = false;
+let recTimerInterval = null;
+let recStart = 0;
+
+function formatTimer(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const m = String(Math.floor(totalSec / 60)).padStart(2, "0");
+  const s = String(totalSec % 60).padStart(2, "0");
+  return `${m}:${s}`;
+}
+
+recordBtn.addEventListener("click", async () => {
+  if (!recording) {
+    try {
+      recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const ctx = await ensureAudioCtx();
+      recPcmChunks = [];
+      recSourceNode = ctx.createMediaStreamSource(recStream);
+      // ScriptProcessorNode is deprecated in favor of AudioWorkletNode, but is
+      // kept here for single-file simplicity and broad support; it still
+      // works reliably for this purpose in current Chrome/Edge/Firefox.
+      recProcessorNode = ctx.createScriptProcessor(4096, 1, 1);
+      recSilentGain = ctx.createGain();
+      recSilentGain.gain.value = 0; // never let mic audio reach the speakers
+      recProcessorNode.onaudioprocess = (e) => {
+        recPcmChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+      };
+      recSourceNode.connect(recProcessorNode);
+      recProcessorNode.connect(recSilentGain);
+      recSilentGain.connect(ctx.destination);
+
+      recording = true;
+      recordBtn.textContent = "■ Stop";
+      recordBtn.classList.add("active");
+      recStart = Date.now();
+      recTimerInterval = setInterval(() => {
+        recTimer.textContent = formatTimer(Date.now() - recStart);
+      }, 500);
+    } catch (err) {
+      console.error(err);
+      setStatus(null, "Microphone access denied or unavailable.");
+    }
+  } else {
+    recording = false;
+    recordBtn.textContent = "● Record";
+    recordBtn.classList.remove("active");
+    clearInterval(recTimerInterval);
+
+    recSourceNode.disconnect();
+    recProcessorNode.disconnect();
+    recSilentGain.disconnect();
+    recStream.getTracks().forEach((t) => t.stop());
+
+    const nativeSampleRate = audioCtx.sampleRate;
+    const totalLength = recPcmChunks.reduce((sum, c) => sum + c.length, 0);
+    const rawPcm = new Float32Array(totalLength);
+    let offset = 0;
+    for (const c of recPcmChunks) { rawPcm.set(c, offset); offset += c.length; }
+    recPcmChunks = [];
+
+    const recordedSeconds = totalLength / nativeSampleRate;
+    chunkProgress.textContent =
+      `Captured ${formatTimer(recordedSeconds * 1000)} of audio at ${nativeSampleRate}Hz — resampling…`;
+
+    try {
+      const audioBuffer = audioCtx.createBuffer(1, rawPcm.length, nativeSampleRate);
+      audioBuffer.copyToChannel(rawPcm, 0);
+      const float32 = await renderBufferTo16k(audioBuffer);
+      await transcribeFloat32(float32);
+    } catch (err) {
+      console.error(err);
+      setStatus(null, "Could not process recording: " + err.message);
+    }
+  }
+});
+
+copyBtn.addEventListener("click", async () => {
+  const text = transcriptBox.textContent || "";
+  if (!text) return;
+  await navigator.clipboard.writeText(text);
+  copyBtn.textContent = "Copied";
+  setTimeout(() => (copyBtn.textContent = "Copy transcript"), 1200);
+});
+
+copyDebugBtn.addEventListener("click", async () => {
+  const text = debugLog.textContent || "";
+  if (!text) return;
+  await navigator.clipboard.writeText(text);
+  copyDebugBtn.textContent = "Copied";
+  setTimeout(() => (copyDebugBtn.textContent = "Copy debug log"), 1200);
+});
+
+clearBtn.addEventListener("click", () => {
+  updateTranscript("");
+  chunkProgress.textContent = "";
+  debugLog.textContent = "";
+});
+</script>
+</body>
+</html>
