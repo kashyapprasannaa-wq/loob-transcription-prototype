@@ -292,7 +292,13 @@
     cap is applied per chunk for that same hallucination case, since the repetition penalty alone
     didn't fully stop it from looping a single word hundreds of times — the cap won't prevent that
     failure mode outright, but it bounds how much damage one bad chunk can do to the rest of the
-    transcript. A small silence pad is added to the true end of longer recordings, capped to whatever
+    transcript. Chunk boundaries are merged in two layers: segment timestamps trim most of the
+    overlap first, then a content-based check compares the tail of what's already been kept against
+    the head of each new chunk and drops any real word-for-word match it finds — added after testing
+    showed repetition clustering at chunk boundaries even when timestamps were present and valid,
+    since each chunk re-segments the same shared audio independently and there's no guarantee two
+    neighboring chunks agree on exactly where a boundary phrase belongs. A small silence pad is added
+    to the true end of longer recordings, capped to whatever
     headroom is left in the last 15s window so it can never spill into creating an extra, near-silent
     final chunk — an earlier version of this padding used a fixed amount and occasionally did exactly
     that, which demoted the chunk holding the real final words out of "last chunk" status and got its
@@ -518,10 +524,39 @@ async function transcribeFloat32(rawFloat32) {
   const primaryLang = langSelect.value;
   const secondaryLang = langSelect2.value; // "auto" here means "None" — see relabeled option
   const hybridMode = secondaryLang !== "auto";
-  const keptSegments = [];
+  let transcriptText = "";
   let lastDetectedLang = null;
   let failedChunks = 0;
   let usedFallback = false;
+
+  // Timestamp-based trimming (below) reduces most cross-chunk overlap, but
+  // each chunk re-segments the same shared audio independently, so there's
+  // no guarantee Whisper's segment boundaries in chunk N line up with the
+  // ones in chunk N+1 for that same overlap region — a phrase can end up
+  // with its timestamp midpoint landing on the "keep" side in both chunks'
+  // own coordinate frames even though the trim logic works correctly in
+  // each one individually. Confirmed in testing: repetition clustered at
+  // chunk boundaries even when segment timestamps were present and valid.
+  // This adds a second, content-based layer on top: after trimming, compare
+  // the tail of what's already been kept against the head of the incoming
+  // chunk's text and drop any real word-for-word overlap found, the same
+  // idea the pipeline's own built-in chunked merge uses (which manual
+  // chunking traded away for the sake of per-chunk language forcing).
+  function findOverlapToSkip(existingWords, newWords, minOverlap = 2, maxSearch = 12) {
+    const searchLen = Math.min(maxSearch, existingWords.length, newWords.length);
+    for (let len = searchLen; len >= minOverlap; len--) {
+      const tail = existingWords.slice(-len).join(" ").toLowerCase();
+      const head = newWords.slice(0, len).join(" ").toLowerCase();
+      if (tail === head) return len;
+    }
+    return 0;
+  }
+  function mergeChunkText(existingText, newText) {
+    const existingWords = existingText.trim() ? existingText.trim().split(/\s+/) : [];
+    const newWords = newText.trim() ? newText.trim().split(/\s+/) : [];
+    const skip = findOverlapToSkip(existingWords, newWords);
+    return { text: existingWords.concat(newWords.slice(skip)).join(" "), skipped: skip };
+  }
 
   // Every previous attempt at this (top-level options, generate_kwargs,
   // forced_decoder_ids, then detecting language from an "unconstrained"
@@ -634,15 +669,15 @@ async function transcribeFloat32(rawFloat32) {
 
       if (hybridMode && languageCode !== lastDetectedLang) {
         const langName = WHISPER_LANGUAGES[languageCode] || languageCode;
-        keptSegments.push(`⟨→ ${langName}⟩`);
+        transcriptText = (transcriptText + ` ⟨→ ${langName}⟩`).trim();
         lastDetectedLang = languageCode;
       }
     } catch (err) {
       console.error(`Chunk ${i + 1} of ${chunks.length} failed:`, err);
       chunkProgress.textContent =
         `Chunk ${i + 1} of ${chunks.length} failed (${err.message}) — continuing with the next chunk.`;
-      keptSegments.push(`[chunk ${i + 1} failed: ${err.message}]`);
-      updateTranscript(keptSegments.join(" ").replace(/\s+/g, " ").trim());
+      transcriptText = (transcriptText + ` [chunk ${i + 1} failed: ${err.message}]`).trim();
+      updateTranscript(transcriptText);
       failedChunks++;
       continue;
     }
@@ -654,21 +689,54 @@ async function transcribeFloat32(rawFloat32) {
     const localEnd = isLast ? chunkDuration : Math.max(localStart, chunkDuration - strideS / 2);
 
     const segments = result.chunks;
-    if (Array.isArray(segments) && segments.length) {
+    const validTimestampCount = Array.isArray(segments)
+      ? segments.filter((s) => s.timestamp && s.timestamp[0] != null && s.timestamp[1] != null).length
+      : 0;
+    logDebug(
+      `Chunk ${i + 1}: ${Array.isArray(segments) ? segments.length : 0} segment(s) returned, ` +
+      `${validTimestampCount} with usable timestamps (trusted window [${localStart.toFixed(1)}, ${localEnd.toFixed(1)}])`
+    );
+
+    let chunkText;
+    if (validTimestampCount > 0) {
+      // Segments without their own timestamp default to being DROPPED rather
+      // than kept, since keeping them unconditionally would silently turn
+      // the trim into a no-op for exactly the region it exists to trim.
+      const kept = [];
       for (const seg of segments) {
         const ts = seg.timestamp || [null, null];
         const [s, e] = ts;
         const mid = (s != null && e != null) ? (s + e) / 2 : null;
-        if (mid === null || (mid >= localStart && mid < localEnd)) {
-          keptSegments.push(seg.text.trim());
+        if (mid !== null && mid >= localStart && mid < localEnd) {
+          kept.push(seg.text.trim());
         }
       }
+      chunkText = kept.join(" ");
     } else {
+      // No usable timestamps anywhere in this chunk — trimming by timestamp
+      // is impossible, so fall back to a rough word-proportion trim instead
+      // of keeping the entire chunk (which would duplicate content with
+      // both neighbors at once).
       usedFallback = true;
-      keptSegments.push(result.text.trim());
+      const words = (result.text || "").trim().split(/\s+/).filter(Boolean);
+      const startFrac = chunkDuration > 0 ? localStart / chunkDuration : 0;
+      const endFrac = chunkDuration > 0 ? localEnd / chunkDuration : 1;
+      const startIdx = Math.floor(words.length * startFrac);
+      const endIdx = Math.ceil(words.length * endFrac);
+      chunkText = words.slice(startIdx, endIdx).join(" ");
+      logDebug(`Chunk ${i + 1}: no usable timestamps — word-proportion trim kept words ${startIdx}-${endIdx} of ${words.length}`);
     }
 
-    updateTranscript(keptSegments.join(" ").replace(/\s+/g, " ").trim());
+    // Content-based dedup layer: catches residual overlap that timestamp
+    // trimming missed because the two chunks segmented the shared audio
+    // differently (see comment above this loop).
+    const merge = mergeChunkText(transcriptText, chunkText);
+    if (merge.skipped > 0) {
+      logDebug(`Chunk ${i + 1}: overlap dedup skipped ${merge.skipped} duplicate word(s) at the boundary.`);
+    }
+    transcriptText = merge.text;
+
+    updateTranscript(transcriptText);
   }
 
   if (failedChunks > 0) {
@@ -676,7 +744,7 @@ async function transcribeFloat32(rawFloat32) {
       `Done — ${chunks.length} chunks, but ${failedChunks} failed and are marked inline above.`;
   } else if (usedFallback) {
     chunkProgress.textContent =
-      `Done — ${chunks.length} chunks (timestamps unavailable for at least one, so that boundary may repeat a phrase).`;
+      `Done — ${chunks.length} chunks, but at least one had no usable timestamps and used a rougher word-proportion trim instead.`;
   } else {
     chunkProgress.textContent = `Done — ${Math.round(durationS)}s of audio across ${chunks.length} chunks.`;
   }
