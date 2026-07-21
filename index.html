@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LOOB — Local Transcription Prototype</title>
+<title>LOOB — Local Entries Prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -181,7 +181,129 @@
 
   a{ color: var(--ember); }
 
-  .actions-row{ display:flex; gap:10px; margin-top:16px; }
+  .actions-row{ display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; }
+
+  /* view tabs */
+  .tabs{ display:flex; gap:6px; margin-bottom:30px; border-bottom:1px solid var(--line); }
+  .tab{
+    background:transparent; border:none; border-bottom:2px solid transparent;
+    color:var(--parchment-dim); padding:10px 14px; border-radius:0;
+    font-family:'JetBrains Mono', monospace; font-size:12px;
+    letter-spacing:0.1em; text-transform:uppercase;
+  }
+  .tab:hover{ color:var(--parchment); }
+  .tab.active{ color:var(--ember); border-bottom-color:var(--ember); }
+
+  /* library list */
+  .search-input{
+    width:100%;
+    background:rgba(0,0,0,0.25); border:1px solid var(--line);
+    color:var(--parchment); padding:10px 12px; border-radius:3px;
+    font-family:'Inter', sans-serif; font-size:13.5px;
+    margin-bottom:16px;
+  }
+  .entry-card{
+    border:1px solid var(--line); border-radius:3px;
+    padding:16px 18px; margin-bottom:12px; cursor:pointer;
+    background:rgba(0,0,0,0.15);
+    transition:border-color 0.15s ease;
+  }
+  .entry-card:hover{ border-color:var(--ember); }
+  .entry-card h3{
+    font-family:'Fraunces', serif; font-weight:500; font-size:17px;
+    margin:0 0 6px; color:var(--parchment);
+  }
+  .entry-card .preview{
+    font-size:13.5px; line-height:1.55; color:var(--parchment-dim);
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  .meta-line{
+    font-family:'JetBrains Mono', monospace; font-size:11px;
+    color:var(--parchment-dim); letter-spacing:0.04em; line-height:1.6;
+    margin-bottom:8px;
+  }
+  .empty-msg{ font-size:14px; color:var(--parchment-dim); padding:6px 0 4px; line-height:1.55; }
+
+  /* entry detail */
+  .title-input{
+    width:100%; background:transparent; border:none;
+    border-bottom:1px solid var(--line);
+    color:var(--parchment); font-family:'Fraunces', serif;
+    font-size:24px; font-weight:500;
+    padding:6px 2px 10px; margin-bottom:10px;
+  }
+  .title-input:focus{ outline:none; border-bottom-color:var(--ember); }
+  textarea.transcript-edit{
+    width:100%; min-height:220px; resize:vertical;
+    background:rgba(0,0,0,0.22); border:1px solid var(--line); border-radius:3px;
+    padding:18px; font-family:'Fraunces', serif; font-size:16.5px; line-height:1.65;
+    color:var(--parchment);
+  }
+  textarea.note-input{
+    width:100%; min-height:64px; resize:vertical; margin-top:4px;
+    background:rgba(0,0,0,0.25); border:1px solid var(--line); border-radius:3px;
+    padding:10px 12px; font-family:'Inter', sans-serif; font-size:13.5px; line-height:1.55;
+    color:var(--parchment);
+  }
+  .note-item{
+    border-left:2px solid var(--teal); padding:9px 12px; margin-bottom:10px;
+    background:rgba(51,80,90,0.10); border-radius:0 3px 3px 0;
+  }
+  .note-item .note-text{ font-size:13.5px; line-height:1.55; white-space:pre-wrap; }
+  .note-item .note-foot{ display:flex; justify-content:space-between; align-items:center; margin-top:6px; }
+  .note-item .note-foot .meta-line{ margin-bottom:0; }
+  .note-del{ background:none; border:none; color:var(--parchment-dim); font-size:11.5px; padding:2px 4px; }
+  .note-del:hover{ color:var(--ember); }
+  button.danger{ background:transparent; color:#C96B5A; border-color:rgba(201,107,90,0.5); }
+  button.danger:hover{ border-color:#C96B5A; }
+  .badge-edited{
+    font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:0.08em;
+    text-transform:uppercase; color:var(--warn);
+    border:1px solid rgba(214,162,76,0.4); border-radius:2px;
+    padding:2px 6px; margin-left:8px; vertical-align:middle;
+  }
+  .hint{ font-size:11.5px; line-height:1.55; color:var(--parchment-dim); margin:10px 0 0; }
+
+  /* categorization: tags, life era, where/when, privacy */
+  .tag-row{ display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+  .tag-chip{
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:0.04em;
+    padding:5px 10px; border-radius:12px;
+    background:rgba(184,99,46,0.14); border:1px solid rgba(184,99,46,0.4);
+    color:var(--parchment);
+  }
+  .tag-chip.suggested{
+    background:transparent; border-style:dashed; color:var(--parchment-dim); cursor:pointer;
+  }
+  .tag-chip.suggested:hover{ border-color:var(--ember); color:var(--ember); }
+  .tag-chip .tag-x{
+    cursor:pointer; color:var(--parchment-dim); font-family:'Inter',sans-serif; line-height:1;
+  }
+  .tag-chip .tag-x:hover{ color:var(--ember); }
+  .tag-input-row{ display:flex; gap:8px; margin-top:4px; }
+  .tag-input-row input[type=text]{
+    flex:1; background:rgba(0,0,0,0.25); border:1px solid var(--line); color:var(--parchment);
+    padding:8px 10px; border-radius:3px; font-family:'Inter',sans-serif; font-size:13px;
+  }
+  .meta-fields-grid{ display:flex; flex-wrap:wrap; gap:14px; margin:14px 0; }
+  .meta-fields-grid .field{ min-width:180px; flex:1; }
+  .meta-fields-grid input[type=text], .meta-fields-grid input[type=datetime-local], select.era-select{
+    background: rgba(0,0,0,0.25); border:1px solid var(--line); color: var(--parchment);
+    padding: 9px 10px; border-radius:3px; font-family:'Inter',sans-serif; font-size:13.5px; width:100%;
+  }
+  .privacy-toggle{
+    display:flex; align-items:center; gap:10px;
+    font-family:'JetBrains Mono', monospace; font-size:11.5px; letter-spacing:0.05em;
+    color:var(--parchment-dim);
+  }
+  .privacy-toggle input{ width:16px; height:16px; accent-color: var(--ember); }
+  .privacy-toggle.is-private{ color: var(--ok); }
+  textarea.write-entry{
+    width:100%; min-height:120px; resize:vertical;
+    background:rgba(0,0,0,0.22); border:1px solid var(--line); border-radius:3px;
+    padding:16px; font-family:'Fraunces', serif; font-size:16px; line-height:1.6; color:var(--parchment);
+  }
 
   @media (prefers-reduced-motion: reduce){
     .dot.loading, .dot.busy{ animation:none; }
@@ -196,8 +318,17 @@
   <p class="lede">
     This runs Whisper small entirely in your browser tab. <b>No server, no upload</b> —
     audio is decoded and transcribed on this device, in any of the ~99 languages
-    Whisper small was trained on, for recordings of any length.
+    Whisper small was trained on, for recordings of any length. Transcripts can now be
+    saved as <b>entries</b> — edited, annotated with notes, and browsed in the Library —
+    stored in this browser, on this device, and nowhere else.
   </p>
+
+  <div class="tabs">
+    <button class="tab active" id="tabCapture">Capture</button>
+    <button class="tab" id="tabLibrary">Library · <span id="libCount">0</span></button>
+  </div>
+
+  <div id="viewCapture">
 
   <div class="panel">
     <p class="panel-title">Model status</p>
@@ -248,13 +379,50 @@
 
 
   <div class="panel">
+    <p class="panel-title">Or write directly</p>
+    <textarea class="write-entry" id="writeEntryInput"
+              placeholder="Type an entry instead of recording or uploading…"></textarea>
+    <div class="actions-row">
+      <button class="ghost" id="useWrittenTextBtn">Use this text</button>
+    </div>
+    <p class="hint">This loads your text into the transcript below as-is — no transcription step runs.</p>
+  </div>
+
+  <div class="panel">
     <p class="panel-title">Transcript</p>
     <div class="transcript-box" id="transcriptBox"></div>
     <div class="chunk-progress" id="wordCount"></div>
+
+    <div class="meta-fields-grid">
+      <div class="field">
+        <label for="captureWhere">Where</label>
+        <input type="text" id="captureWhere" placeholder="e.g. Grandma's kitchen">
+      </div>
+      <div class="field">
+        <label for="captureWhen">When (if not now)</label>
+        <input type="datetime-local" id="captureWhen">
+      </div>
+      <div class="field">
+        <label for="captureEra">Life era</label>
+        <select class="era-select" id="captureEra"></select>
+        <input type="text" id="captureEraCustom" placeholder="Name this era…" hidden style="margin-top:6px;">
+      </div>
+    </div>
+    <label class="privacy-toggle is-private" id="capturePrivacyLabel">
+      <input type="checkbox" id="capturePrivate" checked>
+      <span id="capturePrivacyText">Private — kept on this device only, not marked for any future sharing</span>
+    </label>
+
     <div class="actions-row">
+      <button class="primary" id="saveEntryBtn" disabled>Save as entry</button>
+      <button class="ghost" id="downloadAudioBtn" hidden>Download recording (.wav)</button>
       <button class="ghost" id="copyBtn">Copy transcript</button>
       <button class="ghost" id="clearBtn">Clear</button>
     </div>
+    <p class="hint" id="captureHint" hidden>
+      Saved entries keep the transcript only — audio is never stored. If you want to keep
+      this recording, download it now; it's discarded the next time you record.
+    </p>
   </div>
 
   <details class="panel" open>
@@ -313,7 +481,96 @@
     guarantee. There's no speaker diarization here — that's a separate stage in the fuller
     blueprint. Performance depends on your device; a laptop with WebGPU support will be noticeably
     faster than CPU-only WASM, and very long recordings will simply take longer rather than failing.
+    <br><br>
+    <strong>Where entries live:</strong> saved entries — transcripts, your edits, and your notes —
+    are written to this browser's IndexedDB storage for this site. They stay on this device and are
+    never sent anywhere, which also means they are tied to this browser profile: clearing this
+    site's data deletes them, private/incognito windows discard them when closed, and they do not
+    sync across devices or browsers. Raw audio is never stored with an entry; the download button
+    offered immediately after a recording is the only moment to keep the audio itself.
   </p>
+
+  </div><!-- /viewCapture -->
+
+  <div id="viewLibrary" hidden>
+
+    <div id="libraryList">
+      <div class="panel">
+        <p class="panel-title">Saved entries</p>
+        <input type="search" class="search-input" id="librarySearch"
+               placeholder="Search titles, transcripts, notes, tags, and life eras…">
+        <div id="entryList"></div>
+      </div>
+    </div>
+
+    <div id="entryDetail" hidden>
+      <div class="panel">
+        <div class="actions-row" style="margin:0 0 18px;">
+          <button class="ghost" id="backToLibraryBtn">← All entries</button>
+        </div>
+        <input class="title-input" id="detailTitle" placeholder="Untitled entry" aria-label="Entry title">
+        <div class="meta-line" id="detailMeta"></div>
+
+        <div class="meta-fields-grid">
+          <div class="field">
+            <label for="detailWhere">Where</label>
+            <input type="text" id="detailWhere" placeholder="e.g. Grandma's kitchen">
+          </div>
+          <div class="field">
+            <label for="detailWhen">When</label>
+            <input type="datetime-local" id="detailWhen">
+          </div>
+          <div class="field">
+            <label for="detailEra">Life era</label>
+            <select class="era-select" id="detailEra"></select>
+            <input type="text" id="detailEraCustom" placeholder="Name this era…" hidden style="margin-top:6px;">
+          </div>
+        </div>
+        <label class="privacy-toggle" id="detailPrivacyLabel">
+          <input type="checkbox" id="detailPrivate">
+          <span id="detailPrivacyText">Private — kept on this device only, not marked for any future sharing</span>
+        </label>
+
+        <div style="margin-top:18px;">
+          <p class="panel-title">Tags</p>
+          <div class="tag-row" id="detailTagRow"></div>
+          <div class="tag-row" id="detailSuggestedRow"></div>
+          <div class="tag-input-row">
+            <input type="text" id="detailTagInput" placeholder="Add a custom tag and press Enter…">
+            <button class="ghost" id="detailTagAddBtn">Add tag</button>
+          </div>
+        </div>
+
+        <div style="margin-top:18px;">
+          <p class="panel-title">Transcript
+            <span class="badge-edited" id="editedBadge" hidden>edited</span>
+          </p>
+          <textarea class="transcript-edit" id="detailTranscript" aria-label="Entry transcript"></textarea>
+          <div class="actions-row">
+            <button class="primary" id="saveChangesBtn" disabled>Save changes</button>
+            <button class="ghost" id="restoreOriginalBtn" hidden>Restore original transcript</button>
+            <button class="ghost" id="detailCopyBtn">Copy transcript</button>
+            <button class="danger" id="deleteEntryBtn">Delete entry</button>
+          </div>
+          <p class="hint">
+            Edits overwrite the working transcript but the original, as-transcribed text is kept
+            with the entry — "Restore original transcript" brings it back at any time.
+          </p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <p class="panel-title">Notes</p>
+        <div id="noteList"></div>
+        <textarea class="note-input" id="noteInput"
+                  placeholder="Add a note on this entry…" aria-label="New note"></textarea>
+        <div class="actions-row">
+          <button class="ghost" id="addNoteBtn">Add note</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /viewLibrary -->
 
 </div>
 
@@ -357,6 +614,36 @@ const debugLog = $("debugLog");
 const copyDebugBtn = $("copyDebugBtn");
 const copyBtn = $("copyBtn"), clearBtn = $("clearBtn");
 
+// entries / library / audio-download elements
+const tabCapture = $("tabCapture"), tabLibrary = $("tabLibrary"), libCount = $("libCount");
+const viewCapture = $("viewCapture"), viewLibrary = $("viewLibrary");
+const saveEntryBtn = $("saveEntryBtn"), downloadAudioBtn = $("downloadAudioBtn"), captureHint = $("captureHint");
+const libraryList = $("libraryList"), entryList = $("entryList"), librarySearch = $("librarySearch");
+const entryDetail = $("entryDetail"), backToLibraryBtn = $("backToLibraryBtn");
+const detailTitle = $("detailTitle"), detailMeta = $("detailMeta"), detailTranscript = $("detailTranscript");
+const saveChangesBtn = $("saveChangesBtn"), restoreOriginalBtn = $("restoreOriginalBtn");
+const detailCopyBtn = $("detailCopyBtn"), deleteEntryBtn = $("deleteEntryBtn"), editedBadge = $("editedBadge");
+const noteList = $("noteList"), noteInput = $("noteInput"), addNoteBtn = $("addNoteBtn");
+
+// text-entry + categorization + consent elements
+const writeEntryInput = $("writeEntryInput"), useWrittenTextBtn = $("useWrittenTextBtn");
+const captureWhere = $("captureWhere"), captureWhen = $("captureWhen"), captureEra = $("captureEra");
+const captureEraCustom = $("captureEraCustom");
+const capturePrivate = $("capturePrivate"), capturePrivacyLabel = $("capturePrivacyLabel"), capturePrivacyText = $("capturePrivacyText");
+const detailWhere = $("detailWhere"), detailWhen = $("detailWhen"), detailEra = $("detailEra");
+const detailEraCustom = $("detailEraCustom");
+const detailPrivate = $("detailPrivate"), detailPrivacyLabel = $("detailPrivacyLabel"), detailPrivacyText = $("detailPrivacyText");
+const detailTagRow = $("detailTagRow"), detailSuggestedRow = $("detailSuggestedRow");
+const detailTagInput = $("detailTagInput"), detailTagAddBtn = $("detailTagAddBtn");
+
+// State for saving entries and offering the raw-audio download. Raw audio is
+// deliberately kept ONLY in memory, only for the most recent mic recording:
+// entries never store audio, so the download button right after a recording
+// is the one window where the audio exists to be kept.
+let lastRecording = null;        // { pcm: Float32Array, sampleRate: number }
+let lastTranscriptionMeta = null; // { durationS, languages: [codes] }
+let currentSource = null;        // { kind: "recording" } | { kind: "file", name }
+
 function logDebug(msg) {
   console.log(msg);
   debugLog.textContent += msg + "\n";
@@ -383,6 +670,97 @@ for (const [code, name] of Object.entries(WHISPER_LANGUAGES)) {
 }
 langSelect.value = "en";
 langSelect2.value = "auto"; // "None (single language only)"
+
+// ===================== life eras =====================
+const LIFE_ERAS = [
+  "Unspecified", "Childhood", "Adolescence", "Young adulthood",
+  "Early career", "Family & parenting", "Midlife", "Later years",
+  "Present day", "Custom…"
+];
+function populateEraSelect(select) {
+  select.textContent = "";
+  for (const era of LIFE_ERAS) {
+    const opt = document.createElement("option");
+    opt.value = era; opt.textContent = era;
+    select.appendChild(opt);
+  }
+}
+populateEraSelect(captureEra);
+populateEraSelect(detailEra);
+
+function wireEraCustomToggle(select, customInput) {
+  select.addEventListener("change", () => {
+    customInput.hidden = select.value !== "Custom…";
+    if (!customInput.hidden) customInput.focus();
+  });
+}
+wireEraCustomToggle(captureEra, captureEraCustom);
+wireEraCustomToggle(detailEra, detailEraCustom);
+
+// Resolves the era select + its custom text box down to the single string
+// actually stored on the entry.
+function resolveEra(select, customInput) {
+  if (select.value === "Custom…") return (customInput.value || "").trim() || "Custom…";
+  return select.value;
+}
+function applyEraToControls(select, customInput, era) {
+  const known = LIFE_ERAS.includes(era);
+  select.value = known ? era : "Custom…";
+  customInput.hidden = known;
+  customInput.value = known ? "" : era;
+}
+
+function updatePrivacyLabel(checkbox, label, text) {
+  label.classList.toggle("is-private", checkbox.checked);
+  text.textContent = checkbox.checked
+    ? "Private — kept on this device only, not marked for any future sharing"
+    : "Marked shareable — still stored only on this device; nothing is actually sent anywhere by this prototype";
+}
+function wirePrivacyToggle(checkbox, label, text) {
+  checkbox.addEventListener("change", () => updatePrivacyLabel(checkbox, label, text));
+  updatePrivacyLabel(checkbox, label, text);
+}
+wirePrivacyToggle(capturePrivate, capturePrivacyLabel, capturePrivacyText);
+wirePrivacyToggle(detailPrivate, detailPrivacyLabel, detailPrivacyText);
+
+// ===================== datetime-local helpers =====================
+// datetime-local wants "YYYY-MM-DDTHH:mm" in LOCAL time (no timezone
+// suffix) — built from getFullYear/etc rather than toISOString, which is
+// UTC and would silently shift displayed times by the viewer's offset.
+function msToDatetimeLocal(ms) {
+  const d = new Date(ms);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// ===================== rule-based tag suggestions =====================
+// Deliberately simple keyword matching, consistent with Feature Set 3's
+// "no model, no network" Phase 1 scope — this is a lookup, not inference.
+// Each category's keyword list is checked as whole-word matches against the
+// lowercased transcript; a category is suggested if any of its words hit.
+const TAG_RULES = {
+  work: ["job", "career", "boss", "meeting", "deadline", "coworker", "office", "promotion", "interview", "colleague"],
+  family: ["mother", "father", "mom", "dad", "sister", "brother", "family", "parent", "daughter", "son", "grandma", "grandpa", "grandmother", "grandfather"],
+  health: ["doctor", "hospital", "pain", "sick", "illness", "therapy", "diagnosis", "medication", "surgery", "recovery"],
+  relationships: ["partner", "boyfriend", "girlfriend", "husband", "wife", "marriage", "wedding", "breakup", "friend", "friendship"],
+  travel: ["trip", "flight", "vacation", "abroad", "journey", "airport", "traveled", "travelled", "hotel"],
+  gratitude: ["grateful", "thankful", "blessed", "appreciate", "appreciation", "gratitude"],
+  "loss & grief": ["died", "death", "funeral", "loss", "grief", "passed away", "mourning"],
+  achievement: ["proud", "accomplished", "graduated", "graduation", "promotion", "award", "achievement", "success"],
+  conflict: ["argument", "fight", "angry", "conflict", "disagreement", "tension"],
+  milestone: ["birthday", "anniversary", "graduation", "wedding", "born", "milestone"],
+};
+function suggestTags(text) {
+  const lower = (text || "").toLowerCase();
+  const hits = [];
+  for (const [tag, words] of Object.entries(TAG_RULES)) {
+    for (const w of words) {
+      const re = new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+      if (re.test(lower)) { hits.push(tag); break; }
+    }
+  }
+  return hits;
+}
 
 let transcriber = null;
 let audioCtx = null;
@@ -485,6 +863,8 @@ async function transcribeFloat32(rawFloat32) {
   const durationS = rawFloat32.length / 16000;
   setStatus("busy", `Transcribing ${Math.round(durationS)}s of audio…`);
   debugLog.textContent = "";
+  saveEntryBtn.disabled = true;
+  saveEntryBtn.textContent = "Save as entry";
 
   const sampleRate = 16000;
   const chunkS = 15, strideS = 3;
@@ -748,12 +1128,39 @@ async function transcribeFloat32(rawFloat32) {
   } else {
     chunkProgress.textContent = `Done — ${Math.round(durationS)}s of audio across ${chunks.length} chunks.`;
   }
+  lastTranscriptionMeta = {
+    durationS: Math.round(durationS),
+    languages: hybridMode ? [primaryLang, secondaryLang] : [primaryLang],
+  };
+  saveEntryBtn.disabled = !transcriptText.trim();
   setStatus("ready", "Ready.");
 }
+
+// ===================== text entry (no transcription step) =====================
+useWrittenTextBtn.addEventListener("click", () => {
+  const text = writeEntryInput.value.trim();
+  if (!text) return;
+  currentSource = { kind: "text" };
+  lastRecording = null;
+  downloadAudioBtn.hidden = true;
+  captureHint.hidden = true;
+  lastTranscriptionMeta = { durationS: null, languages: [] };
+  updateTranscript(text);
+  chunkProgress.textContent = "Loaded from written entry — no transcription performed.";
+  debugLog.textContent = "";
+  saveEntryBtn.disabled = false;
+  setStatus("ready", "Ready.");
+});
 
 fileInput.addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
+  // The user already has this file on disk, so no download offer is needed —
+  // and any previous mic recording's one-time download window closes here.
+  currentSource = { kind: "file", name: file.name };
+  lastRecording = null;
+  downloadAudioBtn.hidden = true;
+  captureHint.hidden = true;
   try {
     setStatus("busy", `Decoding ${file.name}…`);
     const buf = await file.arrayBuffer();
@@ -798,6 +1205,11 @@ recordBtn.addEventListener("click", async () => {
       recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const ctx = await ensureAudioCtx();
       recPcmChunks = [];
+      // Starting a new recording discards the previous one's audio — its
+      // download window is over.
+      lastRecording = null;
+      downloadAudioBtn.hidden = true;
+      captureHint.hidden = true;
       recSourceNode = ctx.createMediaStreamSource(recStream);
       // ScriptProcessorNode is deprecated in favor of AudioWorkletNode, but is
       // kept here for single-file simplicity and broad support; it still
@@ -841,6 +1253,14 @@ recordBtn.addEventListener("click", async () => {
     for (const c of recPcmChunks) { rawPcm.set(c, offset); offset += c.length; }
     recPcmChunks = [];
 
+    // Keep the untouched, native-sample-rate PCM around (in memory only) so
+    // "Download recording" can hand back exactly what the mic captured —
+    // not the 16kHz downsample the model sees.
+    lastRecording = { pcm: rawPcm, sampleRate: nativeSampleRate };
+    currentSource = { kind: "recording" };
+    downloadAudioBtn.hidden = false;
+    captureHint.hidden = false;
+
     const recordedSeconds = totalLength / nativeSampleRate;
     chunkProgress.textContent =
       `Captured ${formatTimer(recordedSeconds * 1000)} of audio at ${nativeSampleRate}Hz — resampling…`;
@@ -877,7 +1297,505 @@ clearBtn.addEventListener("click", () => {
   updateTranscript("");
   chunkProgress.textContent = "";
   debugLog.textContent = "";
+  saveEntryBtn.disabled = true;
+  lastTranscriptionMeta = null;
 });
+
+// ===================== raw-audio WAV download =====================
+// Standard 16-bit PCM WAV container written by hand — no library needed,
+// no lossy re-encode, and nothing touches the network. Encoded at the
+// recording's native sample rate (typically 44.1/48kHz), not the 16kHz
+// downsample the model consumes.
+function encodeWav(float32, sampleRate) {
+  const numSamples = float32.length;
+  const buffer = new ArrayBuffer(44 + numSamples * 2);
+  const view = new DataView(buffer);
+  const writeStr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  writeStr(0, "RIFF"); view.setUint32(4, 36 + numSamples * 2, true); writeStr(8, "WAVE");
+  writeStr(12, "fmt "); view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);            // PCM
+  view.setUint16(22, 1, true);            // mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true); // byte rate
+  view.setUint16(32, 2, true);            // block align
+  view.setUint16(34, 16, true);           // bits per sample
+  writeStr(36, "data"); view.setUint32(40, numSamples * 2, true);
+  let off = 44;
+  for (let i = 0; i < numSamples; i++, off += 2) {
+    const s = Math.max(-1, Math.min(1, float32[i]));
+    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
+downloadAudioBtn.addEventListener("click", () => {
+  if (!lastRecording) return;
+  const blob = encodeWav(lastRecording.pcm, lastRecording.sampleRate);
+  const url = URL.createObjectURL(blob);
+  const stamp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `loob-recording-${stamp}.wav`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+});
+
+// ===================== entry storage (IndexedDB) =====================
+// Entries live in this browser's IndexedDB for this origin — on-device,
+// no network involvement, consistent with the local-first claim. Each
+// entry is one record: transcript (working copy), originalTranscript
+// (as-transcribed, immutable), notes, and capture metadata.
+const DB_NAME = "loob-entries", DB_VERSION = 1, STORE = "entries";
+let dbPromise = null;
+function openDb() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) {
+        const store = db.createObjectStore(STORE, { keyPath: "id" });
+        store.createIndex("updatedAt", "updatedAt");
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return dbPromise;
+}
+function withStore(mode, fn) {
+  return openDb().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, mode);
+    const req = fn(tx.objectStore(STORE));
+    tx.oncomplete = () => resolve(req && req.result);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  }));
+}
+const dbPut = (entry) => withStore("readwrite", (s) => s.put(entry));
+const dbGetAll = () => withStore("readonly", (s) => s.getAll());
+const dbDelete = (id) => withStore("readwrite", (s) => s.delete(id));
+
+const uid = () => (crypto.randomUUID
+  ? crypto.randomUUID()
+  : Date.now() + "-" + Math.random().toString(36).slice(2));
+
+let cachedEntries = [];
+let openEntryId = null;
+
+async function refreshEntries() {
+  try {
+    cachedEntries = (await dbGetAll()).sort((a, b) => b.updatedAt - a.updatedAt);
+  } catch (err) {
+    console.error("Could not read saved entries:", err);
+    cachedEntries = [];
+  }
+  libCount.textContent = String(cachedEntries.length);
+}
+const getEntry = (id) => cachedEntries.find((e) => e.id === id);
+
+function fmtDate(ms) {
+  return new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+function entryMetaLine(e) {
+  const parts = [fmtDate(e.createdAt)];
+  if (e.meta && e.meta.durationS != null) parts.push(`${e.meta.durationS}s`);
+  if (e.meta && e.meta.languages && e.meta.languages.length) {
+    parts.push(e.meta.languages.map((c) => WHISPER_LANGUAGES[c] || c).join(" + "));
+  }
+  if (e.meta && e.meta.source === "file" && e.meta.fileName) parts.push(e.meta.fileName);
+  if (e.where) parts.push(e.where);
+  if (e.lifeEra && e.lifeEra !== "Unspecified") parts.push(e.lifeEra);
+  const w = e.transcript.trim() ? e.transcript.trim().split(/\s+/).length : 0;
+  parts.push(`${w} words`);
+  if (e.notes.length) parts.push(`${e.notes.length} note${e.notes.length === 1 ? "" : "s"}`);
+  const tags = e.tags || [];
+  if (tags.length) parts.push(tags.join(", "));
+  parts.push(e.private === false ? "shareable" : "private");
+  return parts.join(" · ");
+}
+
+// ===================== save-as-entry =====================
+saveEntryBtn.addEventListener("click", async () => {
+  const transcript = (transcriptBox.textContent || "").trim();
+  if (!transcript) return;
+  const now = Date.now();
+  const words = transcript.split(/\s+/).filter(Boolean);
+  // "When" defaults to the moment of saving unless the person backdates it;
+  // stored as epoch ms alongside the human-entered datetime-local string.
+  const whenMs = captureWhen.value ? new Date(captureWhen.value).getTime() : now;
+  const entry = {
+    id: uid(),
+    createdAt: now,
+    updatedAt: now,
+    title: words.slice(0, 8).join(" ") + (words.length > 8 ? "…" : ""),
+    transcript,
+    originalTranscript: transcript,
+    notes: [],
+    where: captureWhere.value.trim(),
+    when: whenMs,
+    lifeEra: resolveEra(captureEra, captureEraCustom),
+    private: capturePrivate.checked,
+    // Rule-based suggestions are accepted as the entry's starting tags —
+    // matches Feature Set 3's "rule-based tags" default; the person can
+    // remove any of them or add custom ones afterward in the Library.
+    tags: suggestTags(transcript),
+    meta: {
+      durationS: lastTranscriptionMeta ? lastTranscriptionMeta.durationS : null,
+      languages: lastTranscriptionMeta ? lastTranscriptionMeta.languages : [],
+      source: currentSource ? currentSource.kind : "unknown",
+      fileName: currentSource && currentSource.name ? currentSource.name : null,
+    },
+  };
+  try {
+    await dbPut(entry);
+  } catch (err) {
+    console.error("Saving entry failed:", err);
+    setStatus(null, "Could not save entry: " + err.message);
+    return;
+  }
+  await refreshEntries();
+  saveEntryBtn.disabled = true;
+  saveEntryBtn.textContent = "Saved ✓";
+  // Reset the per-entry capture fields so the next save doesn't silently
+  // inherit the previous entry's where/when/era/privacy.
+  captureWhere.value = "";
+  captureWhen.value = "";
+  captureEra.value = "Unspecified";
+  captureEraCustom.hidden = true;
+  captureEraCustom.value = "";
+  capturePrivate.checked = true;
+  updatePrivacyLabel(capturePrivate, capturePrivacyLabel, capturePrivacyText);
+  setTimeout(() => (saveEntryBtn.textContent = "Save as entry"), 1600);
+});
+
+// ===================== view switching =====================
+function showCapture() {
+  viewCapture.hidden = false;
+  viewLibrary.hidden = true;
+  tabCapture.classList.add("active");
+  tabLibrary.classList.remove("active");
+}
+function showLibrary() {
+  viewCapture.hidden = true;
+  viewLibrary.hidden = false;
+  tabLibrary.classList.add("active");
+  tabCapture.classList.remove("active");
+  closeDetail();
+  renderEntryList();
+}
+tabCapture.addEventListener("click", showCapture);
+tabLibrary.addEventListener("click", showLibrary);
+
+// ===================== library list =====================
+// All library rendering is done via textContent / DOM nodes, never
+// innerHTML, so transcript or note content can't be interpreted as markup.
+function renderEntryList() {
+  const q = (librarySearch.value || "").trim().toLowerCase();
+  entryList.textContent = "";
+  const items = cachedEntries.filter((e) => {
+    if (!q) return true;
+    const hay = (
+      e.title + " " + e.transcript + " " + e.notes.map((n) => n.text).join(" ") + " " +
+      (e.tags || []).join(" ") + " " + (e.lifeEra || "") + " " + (e.where || "")
+    ).toLowerCase();
+    return hay.includes(q);
+  });
+  if (!items.length) {
+    const d = document.createElement("div");
+    d.className = "empty-msg";
+    d.textContent = q
+      ? "No entries match that search."
+      : "No saved entries yet — record or upload something in Capture, then press \u201CSave as entry\u201D.";
+    entryList.appendChild(d);
+    return;
+  }
+  for (const e of items) {
+    const card = document.createElement("div");
+    card.className = "entry-card";
+    const h = document.createElement("h3");
+    h.textContent = e.title || "Untitled entry";
+    if (e.transcript !== e.originalTranscript) {
+      const b = document.createElement("span");
+      b.className = "badge-edited";
+      b.textContent = "edited";
+      h.appendChild(b);
+    }
+    const m = document.createElement("div");
+    m.className = "meta-line";
+    m.textContent = entryMetaLine(e);
+    const p = document.createElement("div");
+    p.className = "preview";
+    p.textContent = e.transcript;
+    card.append(h, m, p);
+    card.addEventListener("click", () => openDetail(e.id));
+    entryList.appendChild(card);
+  }
+}
+librarySearch.addEventListener("input", renderEntryList);
+
+// ===================== entry detail =====================
+let deleteArmed = false;
+let deleteArmTimer = null;
+
+function openDetail(id) {
+  const e = getEntry(id);
+  if (!e) return;
+  openEntryId = id;
+  libraryList.hidden = true;
+  entryDetail.hidden = false;
+  detailTitle.value = e.title || "";
+  detailTranscript.value = e.transcript;
+  detailWhere.value = e.where || "";
+  detailWhen.value = msToDatetimeLocal(e.when || e.createdAt);
+  applyEraToControls(detailEra, detailEraCustom, e.lifeEra || "Unspecified");
+  detailPrivate.checked = e.private !== false; // absent/undefined defaults to private
+  updatePrivacyLabel(detailPrivate, detailPrivacyLabel, detailPrivacyText);
+  saveChangesBtn.disabled = true;
+  saveChangesBtn.textContent = "Save changes";
+  disarmDelete();
+  updateDetailChrome(e);
+  renderNotes(e);
+  renderTags(e);
+}
+function closeDetail() {
+  openEntryId = null;
+  entryDetail.hidden = true;
+  libraryList.hidden = false;
+  disarmDelete();
+}
+backToLibraryBtn.addEventListener("click", () => { closeDetail(); renderEntryList(); });
+
+function updateDetailChrome(e) {
+  let meta = entryMetaLine(e);
+  if (e.updatedAt !== e.createdAt) meta += ` · updated ${fmtDate(e.updatedAt)}`;
+  detailMeta.textContent = meta;
+  editedBadge.hidden = e.transcript === e.originalTranscript;
+  restoreOriginalBtn.hidden = detailTranscript.value === e.originalTranscript;
+}
+function markDirty() {
+  const e = getEntry(openEntryId);
+  if (!e) return;
+  const currentEra = resolveEra(detailEra, detailEraCustom);
+  const dirty =
+    detailTranscript.value !== e.transcript ||
+    detailTitle.value.trim() !== (e.title || "") ||
+    detailWhere.value.trim() !== (e.where || "") ||
+    msToDatetimeLocal(e.when || e.createdAt) !== detailWhen.value ||
+    currentEra !== (e.lifeEra || "Unspecified") ||
+    detailPrivate.checked !== (e.private !== false);
+  saveChangesBtn.disabled = !dirty;
+  restoreOriginalBtn.hidden = detailTranscript.value === e.originalTranscript;
+}
+detailTitle.addEventListener("input", markDirty);
+detailTranscript.addEventListener("input", markDirty);
+detailWhere.addEventListener("input", markDirty);
+detailWhen.addEventListener("input", markDirty);
+detailEra.addEventListener("change", markDirty);
+detailEraCustom.addEventListener("input", markDirty);
+detailPrivate.addEventListener("change", markDirty);
+
+restoreOriginalBtn.addEventListener("click", () => {
+  const e = getEntry(openEntryId);
+  if (!e) return;
+  detailTranscript.value = e.originalTranscript;
+  markDirty();
+});
+
+saveChangesBtn.addEventListener("click", async () => {
+  const e = getEntry(openEntryId);
+  if (!e) return;
+  e.title = detailTitle.value.trim() || "Untitled entry";
+  e.transcript = detailTranscript.value;
+  e.where = detailWhere.value.trim();
+  e.when = detailWhen.value ? new Date(detailWhen.value).getTime() : e.when;
+  e.lifeEra = resolveEra(detailEra, detailEraCustom);
+  e.private = detailPrivate.checked;
+  e.updatedAt = Date.now();
+  try {
+    await dbPut(e);
+  } catch (err) {
+    console.error("Saving changes failed:", err);
+    return;
+  }
+  await refreshEntries();
+  const fresh = getEntry(openEntryId);
+  if (fresh) {
+    detailTitle.value = fresh.title;
+    updateDetailChrome(fresh);
+  }
+  saveChangesBtn.disabled = true;
+  saveChangesBtn.textContent = "Saved ✓";
+  setTimeout(() => (saveChangesBtn.textContent = "Save changes"), 1600);
+});
+
+detailCopyBtn.addEventListener("click", async () => {
+  const text = detailTranscript.value || "";
+  if (!text) return;
+  await navigator.clipboard.writeText(text);
+  detailCopyBtn.textContent = "Copied";
+  setTimeout(() => (detailCopyBtn.textContent = "Copy transcript"), 1200);
+});
+
+// Deleting is deliberately a two-press action rather than a modal — there is
+// no undo once an IndexedDB record is gone, matching the no-server model.
+function disarmDelete() {
+  deleteArmed = false;
+  clearTimeout(deleteArmTimer);
+  deleteEntryBtn.textContent = "Delete entry";
+}
+deleteEntryBtn.addEventListener("click", async () => {
+  if (!deleteArmed) {
+    deleteArmed = true;
+    deleteEntryBtn.textContent = "Press again to delete — no undo";
+    deleteArmTimer = setTimeout(disarmDelete, 3500);
+    return;
+  }
+  disarmDelete();
+  try {
+    await dbDelete(openEntryId);
+  } catch (err) {
+    console.error("Deleting entry failed:", err);
+    return;
+  }
+  await refreshEntries();
+  closeDetail();
+  renderEntryList();
+});
+
+// ===================== notes =====================
+function renderNotes(e) {
+  noteList.textContent = "";
+  if (!e.notes.length) {
+    const d = document.createElement("div");
+    d.className = "empty-msg";
+    d.textContent = "No notes on this entry yet.";
+    noteList.appendChild(d);
+    return;
+  }
+  for (const n of e.notes) {
+    const item = document.createElement("div");
+    item.className = "note-item";
+    const t = document.createElement("div");
+    t.className = "note-text";
+    t.textContent = n.text;
+    const foot = document.createElement("div");
+    foot.className = "note-foot";
+    const meta = document.createElement("span");
+    meta.className = "meta-line";
+    meta.textContent = fmtDate(n.createdAt);
+    const del = document.createElement("button");
+    del.className = "note-del";
+    del.textContent = "Remove";
+    del.addEventListener("click", async () => {
+      const cur = getEntry(openEntryId);
+      if (!cur) return;
+      cur.notes = cur.notes.filter((x) => x.id !== n.id);
+      cur.updatedAt = Date.now();
+      try { await dbPut(cur); } catch (err) { console.error("Removing note failed:", err); return; }
+      await refreshEntries();
+      const fresh = getEntry(openEntryId);
+      if (fresh) { renderNotes(fresh); updateDetailChrome(fresh); }
+    });
+    foot.append(meta, del);
+    item.append(t, foot);
+    noteList.appendChild(item);
+  }
+}
+addNoteBtn.addEventListener("click", async () => {
+  const text = noteInput.value.trim();
+  if (!text) return;
+  const e = getEntry(openEntryId);
+  if (!e) return;
+  e.notes.push({ id: uid(), text, createdAt: Date.now() });
+  e.updatedAt = Date.now();
+  try { await dbPut(e); } catch (err) { console.error("Adding note failed:", err); return; }
+  noteInput.value = "";
+  await refreshEntries();
+  const fresh = getEntry(openEntryId);
+  if (fresh) { renderNotes(fresh); updateDetailChrome(fresh); }
+});
+
+// ===================== tags (categorization) =====================
+// Applied tags render as removable chips; suggested-but-not-applied tags
+// (from the rule engine, re-run against the CURRENT transcript so edits are
+// reflected) render as dashed, clickable chips that add themselves on click.
+// Both lists persist immediately, same pattern as notes, rather than
+// bundling into the title/transcript "Save changes" dirty-check.
+function renderTags(e) {
+  const applied = e.tags || [];
+  detailTagRow.textContent = "";
+  if (!applied.length) {
+    const d = document.createElement("span");
+    d.className = "hint";
+    d.textContent = "No tags applied yet.";
+    detailTagRow.appendChild(d);
+  }
+  for (const tag of applied) {
+    const chip = document.createElement("span");
+    chip.className = "tag-chip";
+    const label = document.createElement("span");
+    label.textContent = tag;
+    const x = document.createElement("span");
+    x.className = "tag-x";
+    x.textContent = "✕";
+    x.title = `Remove "${tag}"`;
+    x.addEventListener("click", () => removeTag(tag));
+    chip.append(label, x);
+    detailTagRow.appendChild(chip);
+  }
+
+  const suggested = suggestTags(e.transcript).filter((t) => !applied.includes(t));
+  detailSuggestedRow.textContent = "";
+  for (const tag of suggested) {
+    const chip = document.createElement("span");
+    chip.className = "tag-chip suggested";
+    chip.textContent = `+ ${tag}`;
+    chip.title = `Add suggested tag "${tag}"`;
+    chip.addEventListener("click", () => addTag(tag));
+    detailSuggestedRow.appendChild(chip);
+  }
+}
+async function addTag(tag) {
+  const clean = tag.trim().toLowerCase();
+  if (!clean) return;
+  const e = getEntry(openEntryId);
+  if (!e) return;
+  e.tags = e.tags || [];
+  if (e.tags.includes(clean)) return;
+  e.tags.push(clean);
+  e.updatedAt = Date.now();
+  try { await dbPut(e); } catch (err) { console.error("Adding tag failed:", err); return; }
+  await refreshEntries();
+  const fresh = getEntry(openEntryId);
+  if (fresh) { renderTags(fresh); updateDetailChrome(fresh); }
+}
+async function removeTag(tag) {
+  const e = getEntry(openEntryId);
+  if (!e) return;
+  e.tags = (e.tags || []).filter((t) => t !== tag);
+  e.updatedAt = Date.now();
+  try { await dbPut(e); } catch (err) { console.error("Removing tag failed:", err); return; }
+  await refreshEntries();
+  const fresh = getEntry(openEntryId);
+  if (fresh) { renderTags(fresh); updateDetailChrome(fresh); }
+}
+detailTagAddBtn.addEventListener("click", () => {
+  addTag(detailTagInput.value);
+  detailTagInput.value = "";
+});
+detailTagInput.addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") {
+    ev.preventDefault();
+    addTag(detailTagInput.value);
+    detailTagInput.value = "";
+  }
+});
+
+// ===================== init =====================
+refreshEntries();
 </script>
 </body>
 </html>

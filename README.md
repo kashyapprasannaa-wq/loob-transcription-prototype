@@ -1,74 +1,93 @@
-# LOOB — Local-First Whisper Transcription Prototype
+# LOOB — Local Entries Prototype
 
-A single-file, browser-based transcription prototype built for AEGGNOLOGIE's LOOB project. Runs
-Whisper small entirely client-side via [transformers.js](https://github.com/huggingface/transformers.js) —
-no server, no upload. Audio never leaves the device it's recorded or opened on.
+A single-file, local-first browser prototype for LOOB. Runs Whisper small
+entirely client-side via [transformers.js](https://huggingface.co/docs/transformers.js) —
+no server, no upload, no network involvement beyond the one-time model
+download. Everything below (transcripts, edits, notes, tags) is stored in
+this browser's own IndexedDB, on this device, and nowhere else.
 
 ## Running it
 
-No build step, no install. Just open `index.html` in a recent version of Chrome or Edge.
+No build step. Serve the folder over HTTP (opening `index.html` directly as
+a `file://` URL breaks ES module imports and microphone access):
 
-- **WebGPU** speeds things up significantly if your browser/device supports it; it falls back to
-  WASM otherwise.
-- First model load downloads ~250MB from Hugging Face's CDN and caches it in the browser — that's
-  the only point this ever touches the network. Every recording after that runs fully offline.
+```bash
+python3 -m http.server 8080
+```
 
-**To try it without cloning:** open this repo's GitHub Pages URL (see below) directly, or download
-`index.html` and double-click it.
+Then open `http://localhost:8080` in Chrome or Edge (WebGPU support gives a
+real speed boost; it falls back to WASM otherwise). If this is already
+hosted via GitHub Pages, just open that URL.
 
-## What it does
+## What's in it
 
-- Transcribes microphone recordings or uploaded audio files of any length (chunked internally —
-  Whisper's own context window caps out at 30 seconds per call).
-- Supports two modes:
-  - **Single language** — pick one language, one pass per ~15s window.
-  - **Hybrid / code-switching** — set a second "Also expect" language, and each window is
-    transcribed once per candidate language, keeping whichever result actually matches its claimed
-    language (by script or word patterns). Roughly 2x the compute, but avoids Whisper's tendency to
-    silently mistranslate rather than transcribe when no language is pinned down explicitly.
+**Capture**
+- Record from the mic (unbounded length — chunked into 15s windows under
+  the hood) or upload an audio file
+- Or write an entry directly as text, no transcription step
+- Primary + optional secondary language, for code-switching recordings
+  (each ~15s window is tried against both explicitly and the better match
+  is kept — see the in-app footnote for the full reasoning and known
+  limits of this approach)
+- Per-entry Where / When / Life Era / Private-vs-shareable fields, set at
+  save time
+- A "Download recording (.wav)" button appears right after a mic
+  recording — that's the only window to keep the audio, since **saved
+  entries never store audio**
 
-## Known limitations (worth reading before testing)
+**Library**
+- Every saved entry: title, transcript, metadata, tags, life era, notes
+- Search across titles, transcripts, notes, tags, life era, and location
+- Open any entry to edit the title/transcript (the original
+  as-transcribed text is always kept alongside your edits, with a
+  one-click "Restore original transcript")
+- Add/remove notes on an entry, timestamped
+- Rule-based tag suggestions (keyword matching across categories like
+  work, family, health, relationships, travel, gratitude, loss & grief,
+  achievement, conflict, milestone) — click a suggested tag to apply it,
+  or add your own custom tags
+- Two-press delete (no undo, matching the no-server storage model)
 
-- **No true blind auto-detection across all ~99 Whisper languages.** This was attempted several
-  ways and confirmed unreliable in-browser with this model/library combination — every unconstrained
-  pass Whisper offers can silently translate instead of transcribing, with no dependable way to
-  detect that after the fact. "Also expect" requires naming the languages in play up front.
-- **Won't catch a language switch faster than ~15 seconds**, including mid-sentence code-switching,
-  or a third language beyond the two candidates picked — a hard limit of how Whisper decodes (it
-  picks one language token per generation call), not something a setting fixes.
-- **Genuine hallucination on quiet or ambiguous audio.** Whisper can occasionally get stuck looping
-  a phrase on silence or background noise — a real model failure mode, not a chunking artifact. A
-  repetition penalty and a generation-length cap limit how much damage one bad chunk can do, but
-  this is a mitigation, not a guarantee.
-- **No speaker diarization.** Out of scope for this prototype — a separate stage in the fuller
-  technical blueprint.
-- Segment-level (not word-level) timestamp trimming at chunk boundaries, since the ONNX build of
-  Whisper small used here isn't exported with the cross-attentions word-level alignment needs.
+## Known limitations
 
-## Recent fixes worth knowing about
+- **Not exercised in a live browser session by me** — verified by static
+  analysis (HTML structure, JS syntax, unit tests on the tag-rule engine
+  and date formatting), but please test a full record → save → edit →
+  tag → delete pass yourself before wider sharing.
+- Transcription auto-translation avoidance, chunk-boundary dedup, and
+  silence-padding fixes are all as before — see in-app footnote for full
+  detail on Whisper's known failure modes and how this pipeline works
+  around them.
+- The rule-based tag engine is intentionally simple keyword matching, not
+  inference — it will under-tag and occasionally mis-tag. That's expected
+  at this stage, not a bug to chase; richer auto-tagging is scoped as a
+  later, MCP-connected upgrade in the Feature Set 3 brief.
+- The Private/Shareable toggle is a schema field and a UI signal right
+  now, not an enforced permission — nothing in this prototype sends data
+  anywhere regardless of its value. It exists so a future MCP server can
+  read it as a real gate once Layer 2 exists.
+- Entries live in this browser's IndexedDB for this origin: they don't
+  sync across devices or browsers, and clearing this site's data (or
+  using a private/incognito window) deletes them.
+- `crypto.randomUUID` (used for entry/tag/note IDs) needs HTTPS or
+  localhost — both GitHub Pages and `python3 -m http.server` qualify.
+  There's a fallback ID generator regardless.
 
-If you tested an earlier build of this, a few things changed:
+## Recent changes (this update)
 
-- **Boundary repetition** (the same phrase appearing twice around a chunk transition) is now
-  handled by two layers: segment-timestamp trimming first, then a content-based check that compares
-  the tail of the transcript so far against the head of each new chunk and drops any real
-  word-for-word overlap it finds. Each layer alone missed cases the other catches, since the two
-  chunks sharing an overlap region segment that audio independently and don't always agree on
-  exactly where a boundary phrase belongs.
-- **Silent auto-translation** (French/Tamil/etc. audio coming back in English without being asked)
-  is fixed by no longer trying to auto-detect language at all — every generation call now explicitly
-  names a language, which was the one combination confirmed reliable after several other approaches
-  weren't.
-- **Dropped endings** on longer recordings are fixed by padding the true end with silence, capped so
-  it can never spill into creating an extra chunk (an earlier version of this padding could do that,
-  which ironically caused the same dropped-ending symptom for a different reason).
+- Added saved entries backed by IndexedDB (fully on-device), a Library
+  view with search, per-entry transcript editing with restore-to-original,
+  and timestamped notes.
+- Added a one-time raw-audio WAV download offered immediately after each
+  recording — audio is never stored with entries.
+- Added text entry as a third input path alongside record/upload.
+- Added Where / When / Life Era fields per entry, editable after saving.
+- Added a per-entry Private/Shareable flag, private by default.
+- Added rule-based tag suggestions plus custom tags, with search now
+  covering tags, life era, and location too.
 
-## Feedback
+## Files
 
-The in-page **debug log** (below the transcript, open by default) shows, per chunk: how many
-segments came back with usable timestamps, whether the dedup layer skipped any duplicate words at a
-boundary, and (in hybrid mode) both candidate languages' scores. Including a copy of this log — it
-has its own "Copy debug log" button — makes any repetition or language issue much faster to track
-down than the transcript text alone.
-
-
+```
+index.html   Everything — UI, styling, and the full app logic in one file
+```
