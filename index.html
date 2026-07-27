@@ -1080,28 +1080,36 @@ function isAppleMobile() {
   return iOS || iPadOSAsMac;
 }
 
-// Returns { device, dtype } that actually fits this environment.
+// Returns { device, dtype, model } that actually fits this environment.
+// On mobile CPU (WASM), whisper-small is painfully slow, so mobile gets
+// whisper-base — markedly smaller and faster on CPU, still solid quality.
+// Desktop keeps whisper-small.
+const MODEL_SMALL = "onnx-community/whisper-small";
+const MODEL_BASE  = "onnx-community/whisper-base";
+
 function pickBackend() {
   const appleMobile = isAppleMobile();
   if (navigator.gpu && !appleMobile) {
     // Desktop / Android WebGPU: fp32 is fine and fastest.
-    return { device: "webgpu", dtype: "fp32" };
+    return { device: "webgpu", dtype: "fp32", model: MODEL_SMALL };
   }
   // iOS/iPadOS: Safari's WebGPU memory ceiling can't hold Whisper-small even
   // quantized to q4 — the GPU buffer allocation crashes the tab outright. So on
   // Apple mobile we skip WebGPU entirely and run on CPU via WASM, which never
-  // touches the GPU budget. Slower than WebGPU, but it actually completes.
+  // touches the GPU budget. Pair it with the smaller base model so CPU
+  // transcription is fast enough to be usable.
   if (appleMobile) {
-    return { device: "wasm", dtype: "q8" };
+    return { device: "wasm", dtype: "q8", model: MODEL_BASE };
   }
-  // No WebGPU at all (other browsers): CPU WASM with q8.
-  return { device: "wasm", dtype: "q8" };
+  // No WebGPU at all (other browsers): CPU WASM. Use base here too, since
+  // no-WebGPU almost always means a weaker/mobile device.
+  return { device: "wasm", dtype: "q8", model: MODEL_BASE };
 }
 
 async function loadWithBackend(backend) {
   return pipeline(
     "automatic-speech-recognition",
-    "onnx-community/whisper-small",
+    backend.model,
     {
       device: backend.device,
       dtype: backend.dtype,
@@ -1118,15 +1126,14 @@ async function loadWithBackend(backend) {
 
 loadModelBtn.addEventListener("click", async () => {
   loadModelBtn.disabled = true;
-  setStatus("loading", "Downloading and initializing Whisper small…");
   const backend = pickBackend();
+  const modelName = backend.model === MODEL_SMALL ? "Whisper small" : "Whisper base";
+  setStatus("loading", `Downloading and initializing ${modelName}…`);
   try {
     transcriber = await loadWithBackend(backend);
     progressFill.style.width = "100%";
-    const label = backend.device === "webgpu"
-      ? (isAppleMobile() ? "WEBGPU (mobile, quantized)" : "WEBGPU")
-      : "WASM";
-    setStatus("ready", `Ready — running on ${label}.`);
+    const label = backend.device === "webgpu" ? "WEBGPU" : "WASM";
+    setStatus("ready", `Ready — ${modelName} on ${label}.`);
     recordBtn.disabled = false;
   } catch (err) {
     console.error("Primary backend failed:", err);
@@ -1136,7 +1143,7 @@ loadModelBtn.addEventListener("click", async () => {
       setStatus("loading", "WebGPU unavailable here — retrying on CPU (WASM)…");
       progressFill.style.width = "0%";
       try {
-        transcriber = await loadWithBackend({ device: "wasm", dtype: "q8" });
+        transcriber = await loadWithBackend({ device: "wasm", dtype: "q8", model: MODEL_BASE });
         progressFill.style.width = "100%";
         setStatus("ready", "Ready — running on WASM (CPU fallback).");
         recordBtn.disabled = false;

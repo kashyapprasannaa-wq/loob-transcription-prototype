@@ -1,38 +1,35 @@
-# GitHub update — force iOS/iPadOS to WASM
+# GitHub update — mobile uses whisper-base for speed
 
 ## Commit message
 
 ```
-Force iOS/iPadOS to WASM (q4 WebGPU still OOM-crashed)
+Use whisper-base on mobile/WASM for usable CPU speed
 
-Quantized q4 WebGPU still overran Safari's WebGPU memory ceiling on
-iOS/iPadOS and hard-crashed the tab on model load. Skip WebGPU
-entirely on Apple mobile and run Whisper-small on CPU via WASM+q8,
-which never touches the GPU budget. Slower but completes reliably.
+whisper-small on mobile CPU (WASM) transcribes far too slowly. Mobile
+and any no-WebGPU path now load whisper-base — markedly smaller and
+faster on CPU, still good quality. Desktop WebGPU keeps whisper-small.
+Model choice now lives in pickBackend() alongside device/dtype.
 ```
 
 ## How to apply
 
-Option A — replace the file:
-Overwrite index.html in the repo root, commit, push.
-
-Option B — apply the patch:
-```
-git apply ios_wasm_fix.patch
-git add index.html
-git commit -m "Force iOS/iPadOS to WASM (q4 WebGPU still OOM-crashed)"
-git push
-```
+Overwrite index.html, commit, push. (Or: git apply mobile_base_model.patch)
 
 ## What changed
 
-One branch in pickBackend(): iOS/iPadOS now returns wasm+q8 instead of
-webgpu+q4. Desktop/Android still use webgpu+fp32, unchanged.
+- pickBackend() now also returns a `model`: MODEL_SMALL for desktop
+  WebGPU, MODEL_BASE for mobile/WASM and the desktop WASM fallback.
+- Status text shows which model loaded ("Ready — Whisper base on WASM").
 
 ## Post-deploy check
 
-- Hard-reload / clear site data on the device first (Pages caches, and
-  the crashed q4 version may be cached).
-- Expect status: "Ready — running on WASM (CPU fallback)".
-- Loading and transcription will be slower on mobile than desktop —
-  that's expected on CPU. It should no longer crash.
+- Hard-reload / clear site data on the device first (Pages caches).
+- Status should read "Ready — Whisper base on WASM." on iOS.
+- Transcription should be noticeably faster than before.
+- Note: base downloads fresh (~1/3 the size of small) — first load
+  re-fetches weights, so allow one download before it's cached.
+
+## If base is still too slow
+
+Swap MODEL_BASE to "onnx-community/whisper-tiny" — smallest/fastest,
+lower accuracy. One-line change at the top of pickBackend().
