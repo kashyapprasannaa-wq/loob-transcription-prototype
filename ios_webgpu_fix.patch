@@ -1,0 +1,111 @@
+--- orig.html	2026-07-27 14:05:19.812303528 +0000
++++ loob.html	2026-07-27 14:04:08.444299286 +0000
+@@ -1065,31 +1065,90 @@
+   statusText.textContent = text;
+ }
+ 
++// iOS/iPadOS Safari exposes navigator.gpu, but its WebGPU memory ceiling is far
++// lower than desktop and cannot hold fp32 Whisper-small — the GPU buffer
++// allocation OOM-kills the tab, which WebKit recovers from by reloading the page,
++// producing a "100% then restart" loop that looks like a failed download but is
++// actually a post-download crash. So: detect iOS/iPadOS and never send it fp32.
++// iPadOS 13+ reports as a Mac, so also treat touch-capable "Macs" as iPadOS.
++function isAppleMobile() {
++  const ua = navigator.userAgent || "";
++  const iOS = /iPad|iPhone|iPod/.test(ua);
++  const iPadOSAsMac = navigator.platform === "MacIntel"
++    && typeof navigator.maxTouchPoints === "number"
++    && navigator.maxTouchPoints > 1;
++  return iOS || iPadOSAsMac;
++}
++
++// Returns { device, dtype } that actually fits this environment.
++function pickBackend() {
++  const appleMobile = isAppleMobile();
++  if (navigator.gpu && !appleMobile) {
++    // Desktop / Android WebGPU: fp32 is fine and fastest.
++    return { device: "webgpu", dtype: "fp32" };
++  }
++  if (navigator.gpu && appleMobile) {
++    // iOS/iPadOS with WebGPU: use it, but only quantized so it fits the
++    // mobile GPU memory budget. q4 for the encoder/decoder keeps buffers small.
++    return {
++      device: "webgpu",
++      dtype: { encoder_model: "q4", decoder_model_merged: "q4" },
++    };
++  }
++  // No WebGPU at all: CPU WASM with q8.
++  return { device: "wasm", dtype: "q8" };
++}
++
++async function loadWithBackend(backend) {
++  return pipeline(
++    "automatic-speech-recognition",
++    "onnx-community/whisper-small",
++    {
++      device: backend.device,
++      dtype: backend.dtype,
++      progress_callback: (p) => {
++        if (p.status === "progress" && p.total) {
++          const pct = Math.round((p.loaded / p.total) * 100);
++          progressFill.style.width = pct + "%";
++          setStatus("loading", `Fetching ${p.file || "model files"} — ${pct}%`);
++        }
++      }
++    }
++  );
++}
++
+ loadModelBtn.addEventListener("click", async () => {
+   loadModelBtn.disabled = true;
+   setStatus("loading", "Downloading and initializing Whisper small…");
++  const backend = pickBackend();
+   try {
+-    const device = navigator.gpu ? "webgpu" : "wasm";
+-    transcriber = await pipeline(
+-      "automatic-speech-recognition",
+-      "onnx-community/whisper-small",
+-      {
+-        device,
+-        dtype: device === "webgpu" ? "fp32" : "q8",
+-        progress_callback: (p) => {
+-          if (p.status === "progress" && p.total) {
+-            const pct = Math.round((p.loaded / p.total) * 100);
+-            progressFill.style.width = pct + "%";
+-            setStatus("loading", `Fetching ${p.file || "model files"} — ${pct}%`);
+-          }
+-        }
+-      }
+-    );
++    transcriber = await loadWithBackend(backend);
+     progressFill.style.width = "100%";
+-    setStatus("ready", `Ready — running on ${device.toUpperCase()}.`);
++    const label = backend.device === "webgpu"
++      ? (isAppleMobile() ? "WEBGPU (mobile, quantized)" : "WEBGPU")
++      : "WASM";
++    setStatus("ready", `Ready — running on ${label}.`);
+     recordBtn.disabled = false;
+   } catch (err) {
+-    console.error(err);
++    console.error("Primary backend failed:", err);
++    // If a quantized-WebGPU attempt still fails on mobile, fall back to WASM
++    // rather than leaving the user in a broken state.
++    if (backend.device === "webgpu") {
++      setStatus("loading", "WebGPU unavailable here — retrying on CPU (WASM)…");
++      progressFill.style.width = "0%";
++      try {
++        transcriber = await loadWithBackend({ device: "wasm", dtype: "q8" });
++        progressFill.style.width = "100%";
++        setStatus("ready", "Ready — running on WASM (CPU fallback).");
++        recordBtn.disabled = false;
++        return;
++      } catch (err2) {
++        console.error("WASM fallback failed:", err2);
++        setStatus(null, "Model failed to load: " + err2.message);
++        loadModelBtn.disabled = false;
++        return;
++      }
++    }
+     setStatus(null, "Model failed to load: " + err.message);
+     loadModelBtn.disabled = false;
+   }
