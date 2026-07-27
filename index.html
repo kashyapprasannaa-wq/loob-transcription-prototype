@@ -561,6 +561,14 @@
     If the entry detail badge reads "not reachable," this is almost always why — check the browser
     console for the specific CORS or connection error. The endpoint and model are remembered in this
     browser's local storage so you only need to set them once.
+    <br><br>
+    <strong>On phones and tablets:</strong> the primary path is the small on-device model (loaded
+    from the AI reflection panel), which needs no server at all. Ollama is a desktop program and
+    cannot run on the phone itself — reaching one from a phone means a separate computer on your
+    network running the server, addressed by its LAN IP (not <code>localhost</code>) with
+    <code>OLLAMA_HOST=0.0.0.0</code>, and, because this page is served over HTTPS, the server placed
+    behind HTTPS too (e.g. a tunnel) to avoid the browser blocking it as mixed content. That's an
+    advanced setup — on mobile, prefer the on-device model, and use Ollama on desktop.
   </p>
 
   </div><!-- /viewCapture -->
@@ -2184,10 +2192,20 @@ const KNOWN_OLLAMA_MODELS = ["llama3.3", "qwen3", "qwen3:8b"];
 // reasonable size/quality/compatibility balance on typical laptops. If the running
 // version of the library doesn't have one of these ids, it's filtered out below
 // rather than offered as a choice that would fail to load.
+// The two tiny models at the top are small enough (q4f16, ~0.3–0.8GB) to have a
+// real chance of fitting iOS/iPadOS Safari's WebGPU buffer ceiling (~256MB–~1GB
+// depending on device), which the 3B+ models below never can. iosOk marks them.
 const WEBLLM_MODEL_CHOICES = [
-  { id: "Llama-3.2-3B-Instruct-q4f16_1-MLC", label: "Llama 3.2 3B (fastest, ~2.3GB)" },
+  { id: "Llama-3.2-1B-Instruct-q4f16_1-MLC", label: "Llama 3.2 1B (mobile-friendly, ~0.8GB)", iosOk: true },
+  { id: "Qwen2.5-0.5B-Instruct-q4f16_1-MLC", label: "Qwen 2.5 0.5B (smallest, ~0.4GB)", iosOk: true },
+  { id: "Llama-3.2-3B-Instruct-q4f16_1-MLC", label: "Llama 3.2 3B (fast, ~2.3GB)" },
   { id: "Qwen2.5-7B-Instruct-q4f16_1-MLC", label: "Qwen 2.5 7B (balanced, ~4.5GB)" },
   { id: "Llama-3.1-8B-Instruct-q4f16_1-MLC", label: "Llama 3.1 8B (best quality, ~4.6GB)" },
+];
+// The iOS load cascade: try these in order, fall back to Ollama if all fail.
+const IOS_WEBLLM_CASCADE = [
+  "Llama-3.2-1B-Instruct-q4f16_1-MLC",
+  "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
 ];
 
 function loadAiSettings() {
@@ -2214,6 +2232,10 @@ let webllmSupported = null; // null = not checked yet, else true/false
 async function detectWebllmSupport() {
   if (webllmSupported !== null) return webllmSupported;
   if (!("gpu" in navigator)) { webllmSupported = false; return false; }
+  // iOS/iPadOS can't hold the 3B+ desktop models, but the tiny models in
+  // IOS_WEBLLM_CASCADE (0.4–0.8GB) may fit Safari's WebGPU budget. So we DO
+  // treat Apple mobile as WebLLM-capable and let loadWebllmModel() try the
+  // tiny models in order, falling back to Ollama only if they all fail to load.
   try {
     const adapter = await navigator.gpu.requestAdapter();
     webllmSupported = !!adapter;
@@ -2227,6 +2249,11 @@ async function detectWebllmSupport() {
 function populateWebllmModelSelect() {
   webllmModel.textContent = "";
   let choices = WEBLLM_MODEL_CHOICES;
+  // On iOS/iPadOS, only offer the models small enough to have a chance of
+  // loading — hide the 3B+ options so a user can't manually pick one and crash.
+  if (isAppleMobile()) {
+    choices = choices.filter((c) => c.iosOk);
+  }
   try {
     const available = new Set(((webllm.prebuiltAppConfig && webllm.prebuiltAppConfig.model_list) || []).map((m) => m.model_id));
     const filtered = choices.filter((c) => available.has(c.id));
@@ -2306,7 +2333,16 @@ async function initAiEngine() {
     aiSettings.engine = supported ? "webllm" : "ollama";
     saveAiSettingsToStorage(aiSettings);
   }
-  if (!supported) {
+  if (supported && isAppleMobile()) {
+    // WebGPU is present on this Apple mobile device — we'll try the tiny models.
+    aiEngineExplainer.innerHTML =
+      "On iOS and iPadOS, AI reflection runs a smaller on-device model (Llama 3.2 " +
+      "1B, or a 0.5B model if that doesn't fit) fully in this tab — nothing sent " +
+      "anywhere. If neither fits this device, AI reflection isn't available on the " +
+      "phone itself: it then needs a desktop browser or a separate computer running " +
+      "Ollama (Ollama can't run on the phone). Everything model-free — recording, " +
+      "transcription, the rule-based Myth vs Truth scan — always works on-device.";
+  } else if (!supported) {
     aiEngineExplainer.innerHTML =
       "This browser doesn't support WebGPU, so AI reflection and the Myth-scan fallback use a " +
       "local Ollama server instead. Try Chrome or Edge (113+) for the fully in-browser option " +
@@ -2348,26 +2384,76 @@ async function checkOllamaConnection() {
 }
 checkOllamaBtn.addEventListener("click", checkOllamaConnection);
 
+// Attempt one WebLLM model load. Resolves the loaded modelId on success,
+// throws on failure. Kept separate so the iOS cascade can call it repeatedly.
+async function tryLoadWebllmModel(modelId) {
+  webllmEngine = await webllm.CreateMLCEngine(modelId, {
+    initProgressCallback: (report) => {
+      webllmLoadHint.textContent = report.text || "Loading…";
+    },
+  });
+  webllmLoadedModelId = modelId;
+  return modelId;
+}
+
 async function loadWebllmModel() {
-  const modelId = webllmModel.value;
   loadWebllmBtn.disabled = true;
   webllmLoadHint.hidden = false;
-  webllmLoadHint.textContent = "Starting download… this can be a few GB the first time, then cached.";
+  webllmLoadHint.textContent = "Starting download… first time only, then cached.";
   setAiBadge(null, "WebLLM · loading…");
-  try {
-    webllmEngine = await webllm.CreateMLCEngine(modelId, {
-      initProgressCallback: (report) => {
-        webllmLoadHint.textContent = report.text || "Loading…";
-      },
-    });
-    webllmLoadedModelId = modelId;
-    webllmLoadHint.hidden = true;
-    persistAiSettingsFromUi();
+
+  // On iOS/iPadOS, walk the tiny-model cascade: try 1B, then 0.5B, and only if
+  // both fail (device too constrained even for those) fall back to Ollama. On
+  // desktop, just load whatever model is selected, with no cascade.
+  const cascade = isAppleMobile() ? IOS_WEBLLM_CASCADE.slice() : [webllmModel.value];
+
+  for (let i = 0; i < cascade.length; i++) {
+    const modelId = cascade[i];
+    try {
+      if (isAppleMobile() && cascade.length > 1) {
+        const nth = i === 0 ? "" : ` (attempt ${i + 1} — smaller model)`;
+        webllmLoadHint.textContent = `Loading on-device model${nth}… first time only, then cached.`;
+      }
+      await tryLoadWebllmModel(modelId);
+      // Success — reflect the actually-loaded model in the dropdown/settings.
+      if (webllmModel.value !== modelId
+          && Array.from(webllmModel.options).some((o) => o.value === modelId)) {
+        webllmModel.value = modelId;
+      }
+      webllmLoadHint.hidden = true;
+      persistAiSettingsFromUi();
+      applyEngineUiState();
+      return;
+    } catch (err) {
+      console.error(`WebLLM load failed for ${modelId}:`, err);
+      // Not the last option → loop and try the next (smaller) model.
+    }
+  }
+
+  // Every WebLLM attempt failed.
+  if (isAppleMobile()) {
+    // Both tiny models were too big for this device's WebGPU budget. Ollama is
+    // not a real on-phone option (it's a desktop server the phone would have to
+    // reach over the network), so we present it honestly as an advanced/desktop
+    // path rather than a casual next step, and reassure that everything
+    // model-free still works fully on-device.
+    aiSettings.engine = "ollama";
+    saveAiSettingsToStorage(aiSettings);
     applyEngineUiState();
-  } catch (err) {
-    console.error("WebLLM model load failed:", err);
     webllmLoadHint.hidden = false;
-    webllmLoadHint.textContent = "Couldn't load the model (" + err.message + "). Try a smaller model above, or switch to Ollama.";
+    webllmLoadHint.innerHTML =
+      "This device can't fit an on-device AI model, so AI reflection isn't " +
+      "available here. Everything else keeps working fully on this device — " +
+      "recording, transcription, the Library, and the rule-based " +
+      "<b>Myth vs Truth</b> scan, none of which need an AI model.<br><br>" +
+      "AI reflection itself needs either a desktop browser (Chrome or Edge, " +
+      "which run the larger models in-tab) or a separate computer on your " +
+      "network running an <b>Ollama</b> server — Ollama can't run on the phone " +
+      "itself, so this is an advanced setup, not a one-tap option.";
+    setAiBadge("bad", "AI reflection needs desktop or Ollama");
+  } else {
+    webllmLoadHint.hidden = false;
+    webllmLoadHint.textContent = "Couldn't load the model. Try a smaller model above, or switch to Ollama.";
     setAiBadge("bad", "WebLLM · load failed");
     loadWebllmBtn.disabled = false;
   }

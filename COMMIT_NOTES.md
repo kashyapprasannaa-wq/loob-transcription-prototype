@@ -1,35 +1,34 @@
-# GitHub update — mobile uses whisper-base for speed
+# GitHub update — honest iOS AI-reflection messaging
 
 ## Commit message
 
 ```
-Use whisper-base on mobile/WASM for usable CPU speed
+Make iOS AI-reflection messaging honest about Ollama
 
-whisper-small on mobile CPU (WASM) transcribes far too slowly. Mobile
-and any no-WebGPU path now load whisper-base — markedly smaller and
-faster on CPU, still good quality. Desktop WebGPU keeps whisper-small.
-Model choice now lives in pickBackend() alongside device/dtype.
+Ollama can't run on a phone — it's a desktop server the device would
+have to reach over the network (LAN IP, OLLAMA_HOST=0.0.0.0, plus
+HTTPS to avoid mixed-content blocking). Reworked the iOS messaging so
+the on-device tiny model is presented as the real mobile path and
+Ollama is framed as a desktop/advanced option, not a one-tap fallback.
+No behaviour change — messaging only.
 ```
 
-## How to apply
+## What changed (all copy, no logic)
 
-Overwrite index.html, commit, push. (Or: git apply mobile_base_model.patch)
-
-## What changed
-
-- pickBackend() now also returns a `model`: MODEL_SMALL for desktop
-  WebGPU, MODEL_BASE for mobile/WASM and the desktop WASM fallback.
-- Status text shows which model loaded ("Ready — Whisper base on WASM").
+- iOS "both tiny models failed" message: no longer implies Ollama is a
+  simple next step. States AI reflection isn't available on the phone
+  itself, that model-free features still work fully on-device, and that
+  Ollama means desktop or a separate networked machine.
+- Supported-iOS explainer: same correction — on-device model is the
+  path; Ollama/desktop only if it doesn't fit.
+- Static setup prose: added a "On phones and tablets" note spelling out
+  why Ollama isn't a phone option (LAN IP not localhost, 0.0.0.0, HTTPS
+  mixed-content) and to prefer the on-device model on mobile.
+- Badge text: "AI reflection needs desktop or Ollama" instead of
+  "using Ollama".
 
 ## Post-deploy check
 
-- Hard-reload / clear site data on the device first (Pages caches).
-- Status should read "Ready — Whisper base on WASM." on iOS.
-- Transcription should be noticeably faster than before.
-- Note: base downloads fresh (~1/3 the size of small) — first load
-  re-fetches weights, so allow one download before it's cached.
-
-## If base is still too slow
-
-Swap MODEL_BASE to "onnx-community/whisper-tiny" — smallest/fastest,
-lower accuracy. One-line change at the top of pickBackend().
+- Hard-reload / clear site data first.
+- Desktop and the on-device iOS cascade behave exactly as before; only
+  the wording differs when a device can't fit a tiny model.
