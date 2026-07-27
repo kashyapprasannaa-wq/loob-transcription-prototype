@@ -1,34 +1,46 @@
-# GitHub update — honest iOS AI-reflection messaging
+# GitHub update — fix iOS crash on longer recordings (memory)
 
 ## Commit message
 
 ```
-Make iOS AI-reflection messaging honest about Ollama
+Stream chunks lazily to fix iOS crash on longer recordings
 
-Ollama can't run on a phone — it's a desktop server the device would
-have to reach over the network (LAN IP, OLLAMA_HOST=0.0.0.0, plus
-HTTPS to avoid mixed-content blocking). Reworked the iOS messaging so
-the on-device tiny model is presented as the real mobile path and
-Ollama is framed as a desktop/advanced option, not a one-tap fallback.
-No behaviour change — messaging only.
+Crash-and-reload at ~1-2min in single-language mode was memory, not
+speed: chunkAudio() pre-sliced the whole recording into an overlapping
+chunk array held for the entire run, stacked on the base recording and
+the ONNX runtime's accumulating per-call tensors — enough to pass iOS
+Safari's memory ceiling and get the tab killed mid-run.
+
+Now compute chunk boundaries (index pairs) instead of materialising all
+chunks, slice one chunk at a time inside the loop, null it and the
+result after each merge, and yield to the event loop between chunks so
+Safari can GC and repaint. Only one 15s chunk is ever alive on top of
+the recording. Chunking is byte-identical to before (verified across
+5s-10min), so transcripts are unchanged.
 ```
 
-## What changed (all copy, no logic)
+## What changed
 
-- iOS "both tiny models failed" message: no longer implies Ollama is a
-  simple next step. States AI reflection isn't available on the phone
-  itself, that model-free features still work fully on-device, and that
-  Ollama means desktop or a separate networked machine.
-- Supported-iOS explainer: same correction — on-device model is the
-  path; Ollama/desktop only if it doesn't fit.
-- Static setup prose: added a "On phones and tablets" note spelling out
-  why Ollama isn't a phone option (LAN IP not localhost, 0.0.0.0, HTTPS
-  mixed-content) and to prefer the on-device model on mobile.
-- Badge text: "AI reflection needs desktop or Ollama" instead of
-  "using Ollama".
+- Added chunkBoundaries() — returns [start,end) pairs, no audio copies.
+- transcribeFloat32(): uses boundaries for padding math and the loop;
+  slices chunkData lazily per iteration; frees chunkData + result and
+  awaits a 0ms timeout each iteration.
+- Old chunkAudio() kept (still used for the <=15s single-chunk case).
+- No output change: lazy boundaries proven equivalent to the old
+  array slicing for every tested length.
 
 ## Post-deploy check
 
 - Hard-reload / clear site data first.
-- Desktop and the on-device iOS cascade behave exactly as before; only
-  the wording differs when a device can't fit a tiny model.
+- iOS: record ~2-3 min in single language -> should now complete
+  without the tab reloading. Progress ("Processing chunk N of M")
+  should tick steadily.
+- Transcript quality should be identical to short recordings.
+
+## If it STILL crashes on very long recordings (10min+)
+
+The remaining large object is the base recording held twice (raw PCM
+in lastRecording for the WAV download, plus the 16k Float32). Next
+lever would be releasing lastRecording's raw PCM once the WAV is
+downloaded/declined, or streaming transcription during recording
+rather than record-then-process. Say the word and I'll wire that in.

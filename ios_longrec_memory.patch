@@ -1,0 +1,145 @@
+--- live.html	2026-07-27 15:17:08.310264440 +0000
++++ loob.html	2026-07-27 15:16:38.193845131 +0000
+@@ -1216,6 +1216,26 @@
+   return chunks;
+ }
+ 
++// Memory-frugal variant: instead of materialising every chunk's audio up front
++// and holding the whole array for the entire run (which, stacked on top of the
++// full recording and the ONNX runtime's per-call tensors, pushes iOS Safari
++// past its memory ceiling and gets the tab killed mid-transcription), this
++// returns just the [start, end) sample boundaries. The loop slices one chunk at
++// a time from these and frees it immediately after transcribing, so only a
++// single 15s chunk of audio is ever alive on top of the base recording.
++function chunkBoundaries(totalLen, sampleRate = 16000, chunkS = 15, strideS = 3) {
++  const chunkSize = chunkS * sampleRate;
++  const step = chunkSize - strideS * sampleRate;
++  const bounds = [];
++  if (totalLen <= chunkSize) { bounds.push([0, totalLen]); return bounds; }
++  for (let start = 0; start < totalLen; start += step) {
++    const end = Math.min(start + chunkSize, totalLen);
++    bounds.push([start, end]);
++    if (end >= totalLen) break;
++  }
++  return bounds;
++}
++
+ // Each chunk gets its own independent transcriber() call, so each one
+ // re-detects language rather than inheriting a single guess for the whole
+ // recording (which is what the pipeline's built-in chunk_length_s does —
+@@ -1246,8 +1266,10 @@
+   // actually holds the real final words to a middle chunk whose tail gets
+   // trimmed after all. Capping the pad to the available headroom means
+   // padding can never change how many chunks there are.
+-  const rawChunks = chunkAudio(rawFloat32, sampleRate, chunkS, strideS);
+-  const lastRawChunkLen = rawChunks[rawChunks.length - 1].length;
++  // Boundaries only (cheap — just index pairs), so we don't hold a second
++  // full overlapping copy of the audio as a chunk array for the whole run.
++  const rawBounds = chunkBoundaries(rawFloat32.length, sampleRate, chunkS, strideS);
++  const lastRawChunkLen = rawBounds[rawBounds.length - 1][1] - rawBounds[rawBounds.length - 1][0];
+   const headroomSamples = chunkSizeSamples - lastRawChunkLen;
+ 
+   let float32 = rawFloat32;
+@@ -1259,13 +1281,13 @@
+     float32 = padded;
+   }
+ 
+-  const chunks = chunkAudio(float32, sampleRate, chunkS, strideS);
+-  if (chunks.length !== rawChunks.length) {
++  const bounds = chunkBoundaries(float32.length, sampleRate, chunkS, strideS);
++  if (bounds.length !== rawBounds.length) {
+     // Should be structurally impossible given the headroom cap above, but
+     // logged rather than assumed — if this ever fires, the cap itself has a
+     // bug and the last chunk's classification can no longer be trusted.
+     console.warn(
+-      `Padding changed chunk count (${rawChunks.length} -> ${chunks.length}) — ` +
++      `Padding changed chunk count (${rawBounds.length} -> ${bounds.length}) — ` +
+       `the last-chunk headroom cap did not behave as expected.`
+     );
+   }
+@@ -1368,8 +1390,12 @@
+     });
+   }
+ 
+-  for (let i = 0; i < chunks.length; i++) {
+-    chunkProgress.textContent = `Processing chunk ${i + 1} of ${chunks.length}…`;
++  for (let i = 0; i < bounds.length; i++) {
++    chunkProgress.textContent = `Processing chunk ${i + 1} of ${bounds.length}…`;
++    // Slice just this chunk's audio now, and free it at the end of the
++    // iteration — only one 15s chunk is ever alive on top of the base
++    // recording, which is what keeps a long recording under iOS's memory cap.
++    let chunkData = float32.slice(bounds[i][0], bounds[i][1]);
+     // Shared generation settings: no_repeat_ngram_size and repetition_penalty
+     // mitigate Whisper's known repetition/hallucination failure mode (getting
+     // stuck looping a phrase) — more likely with 15s windows, since a short
+@@ -1387,7 +1413,7 @@
+     try {
+       if (!hybridMode) {
+         // Single fixed language — no detection needed at all, one pass.
+-        result = await transcribeWithLanguage(chunks[i], primaryLang, genKwargsBase);
++        result = await transcribeWithLanguage(chunkData, primaryLang, genKwargsBase);
+       } else {
+         // Hybrid mode: try both candidates explicitly, keep whichever
+         // result actually matches its own target language.
+@@ -1396,7 +1422,7 @@
+         for (const candidateLang of candidates) {
+           let candidateResult;
+           try {
+-            candidateResult = await transcribeWithLanguage(chunks[i], candidateLang, genKwargsBase);
++            candidateResult = await transcribeWithLanguage(chunkData, candidateLang, genKwargsBase);
+           } catch (err) {
+             logDebug(`Chunk ${i + 1}: candidate "${candidateLang}" failed (${err.message}), skipping it.`);
+             continue;
+@@ -1421,18 +1447,18 @@
+         lastDetectedLang = languageCode;
+       }
+     } catch (err) {
+-      console.error(`Chunk ${i + 1} of ${chunks.length} failed:`, err);
++      console.error(`Chunk ${i + 1} of ${bounds.length} failed:`, err);
+       chunkProgress.textContent =
+-        `Chunk ${i + 1} of ${chunks.length} failed (${err.message}) — continuing with the next chunk.`;
++        `Chunk ${i + 1} of ${bounds.length} failed (${err.message}) — continuing with the next chunk.`;
+       transcriptText = (transcriptText + ` [chunk ${i + 1} failed: ${err.message}]`).trim();
+       updateTranscript(transcriptText);
+       failedChunks++;
+       continue;
+     }
+ 
+-    const chunkDuration = chunks[i].length / sampleRate;
++    const chunkDuration = chunkData.length / sampleRate;
+     const isFirst = i === 0;
+-    const isLast = i === chunks.length - 1;
++    const isLast = i === bounds.length - 1;
+     const localStart = isFirst ? 0 : strideS / 2;
+     const localEnd = isLast ? chunkDuration : Math.max(localStart, chunkDuration - strideS / 2);
+ 
+@@ -1485,16 +1511,26 @@
+     transcriptText = merge.text;
+ 
+     updateTranscript(transcriptText);
++
++    // Drop this chunk's audio and the model result now so they can be
++    // reclaimed before the next iteration allocates the next chunk. Then
++    // yield to the event loop: this lets Safari actually run garbage
++    // collection and repaint, and — critically on iOS — prevents the tab's
++    // memory from ratcheting up across a long recording faster than the
++    // engine can release it, which was crashing the tab mid-run.
++    chunkData = null;
++    result = null;
++    await new Promise((r) => setTimeout(r, 0));
+   }
+ 
+   if (failedChunks > 0) {
+     chunkProgress.textContent =
+-      `Done — ${chunks.length} chunks, but ${failedChunks} failed and are marked inline above.`;
++      `Done — ${bounds.length} chunks, but ${failedChunks} failed and are marked inline above.`;
+   } else if (usedFallback) {
+     chunkProgress.textContent =
+-      `Done — ${chunks.length} chunks, but at least one had no usable timestamps and used a rougher word-proportion trim instead.`;
++      `Done — ${bounds.length} chunks, but at least one had no usable timestamps and used a rougher word-proportion trim instead.`;
+   } else {
+-    chunkProgress.textContent = `Done — ${Math.round(durationS)}s of audio across ${chunks.length} chunks.`;
++    chunkProgress.textContent = `Done — ${Math.round(durationS)}s of audio across ${bounds.length} chunks.`;
+   }
+   lastTranscriptionMeta = {
+     durationS: Math.round(durationS),
