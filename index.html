@@ -1087,15 +1087,14 @@ function pickBackend() {
     // Desktop / Android WebGPU: fp32 is fine and fastest.
     return { device: "webgpu", dtype: "fp32" };
   }
-  if (navigator.gpu && appleMobile) {
-    // iOS/iPadOS with WebGPU: use it, but only quantized so it fits the
-    // mobile GPU memory budget. q4 for the encoder/decoder keeps buffers small.
-    return {
-      device: "webgpu",
-      dtype: { encoder_model: "q4", decoder_model_merged: "q4" },
-    };
+  // iOS/iPadOS: Safari's WebGPU memory ceiling can't hold Whisper-small even
+  // quantized to q4 — the GPU buffer allocation crashes the tab outright. So on
+  // Apple mobile we skip WebGPU entirely and run on CPU via WASM, which never
+  // touches the GPU budget. Slower than WebGPU, but it actually completes.
+  if (appleMobile) {
+    return { device: "wasm", dtype: "q8" };
   }
-  // No WebGPU at all: CPU WASM with q8.
+  // No WebGPU at all (other browsers): CPU WASM with q8.
   return { device: "wasm", dtype: "q8" };
 }
 
