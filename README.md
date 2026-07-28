@@ -18,10 +18,32 @@ Two placeholder art variants are toggleable (raw portal symbol vs. gatekeeper + 
 real artwork drops into the `#portalArtSymbol` / `#portalArtGatekeeper` blocks. Birth
 data is stored on-device only (localStorage) and skips the gate on return visits.
 
-**2. Today (weekly/daily matrix).** A Sunday-start week strip; the seven fixed power
-moves (Acknowledgment, Belief, Choice, Discipline, Expansion, Feel, Going for it) in
-order Sun→Sat; lunar phase, sun sign, and numerology shown as a coordinate strip; and a
+**2. Today (calendar + weekly/daily matrix).** A full month **calendar** you can add
+events into — each day cell shows its power move and event pills, with prev/next/today
+navigation. Clicking a day selects it and updates the matrix below. Events have a title,
+start/end time (or all-day), a category (General / Ritual / Flow state / Rest), and an
+optional note; they're stored per-day on-device and can be edited or deleted. Every past
+(and future) month persists in localStorage and stays browsable through the calendar.
+Below the calendar: a Sunday-start week strip; the seven fixed power moves
+(Acknowledgment, Belief, Choice, Discipline, Expansion, Feel, Going for it) in order
+Sun→Sat; lunar phase, sun sign, and numerology as a coordinate strip; and a
 planned-vs-actual split schedule that exposes the friction between intention and action.
+
+**Calendar ⇄ diary crosslink.** Days where diary entries were recorded show an ✎ marker
+on the calendar, and the selected-day panel lists those entries — each links straight
+into its Library detail view. From an open entry, "View on calendar" jumps back to the
+day it was recorded on. Entries are matched to days by their `when` timestamp.
+
+**Weekly time-grid.** Below "The week" strip, a full 7-day × 24-hour schedule for the
+week containing the selected day. Timed events render as blocks positioned by start/end
+time, with overlapping events packed into side-by-side lanes so none are hidden; all-day
+events sit in a strip along the top; a live "now" line marks the current time on today's
+column. Click any hour cell to add an event prefilled to that time, or click an event
+block to edit it. Clicking a day header selects that day.
+
+**Backup includes calendars.** "Export all entries (.json)" now also bundles every past
+calendar — all events and planned/actual schedules for every day — into the same
+local backup file (export version 2).
 
 - **Numerology** = the Sunday-start **week number of the year, reduced to a single
   digit**. Week 1 is the week containing 1 January; the count resets at the year
