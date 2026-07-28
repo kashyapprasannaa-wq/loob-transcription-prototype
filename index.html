@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LOOB — Local Entries Prototype</title>
+<title>LOOB — Local-first journaling portal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -329,6 +329,29 @@
     max-width: 240px;
   }
 
+  /* threaded replies on a reflection — continuing to reflect via text or voice */
+  .thread-toggle{
+    display:block; background:none; border:none; color:var(--teal); cursor:pointer;
+    font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:0.05em;
+    text-transform:uppercase; padding:6px 0 0; margin-top:4px;
+  }
+  .thread-toggle:hover{ color:var(--ember); }
+  .thread-wrap{ margin-top:12px; padding-top:12px; border-top:1px dashed var(--line); }
+  .thread-msg{
+    padding:8px 12px; margin-bottom:8px; border-radius:0 3px 3px 0;
+    font-size:13.5px; line-height:1.55; white-space:pre-wrap;
+  }
+  .thread-msg.role-user{ border-left:2px solid var(--teal); background:rgba(51,80,90,0.10); }
+  .thread-msg.role-assistant{ border-left:2px solid var(--ember); background:rgba(184,99,46,0.08); }
+  .thread-msg .note-foot{ display:flex; justify-content:space-between; align-items:center; margin-top:6px; }
+  .thread-composer{ margin-top:10px; }
+  .thread-composer textarea{
+    width:100%; min-height:56px; resize:vertical;
+    background:rgba(0,0,0,0.25); border:1px solid var(--line); border-radius:3px;
+    padding:9px 11px; font-family:'Inter', sans-serif; font-size:13.5px; line-height:1.55;
+    color:var(--parchment);
+  }
+
   /* Myth vs Truth (rule-based, on-device) */
   .myth-item{
     border:1px solid var(--line); border-radius:4px; padding:14px 16px; margin-bottom:14px;
@@ -367,27 +390,418 @@
   @media (prefers-reduced-motion: reduce){
     .dot.loading, .dot.busy{ animation:none; }
   }
+
+  /* ===================== PORTAL (entry gate) ===================== */
+  #portal{
+    position:fixed; inset:0; z-index:100;
+    background: radial-gradient(130% 130% at 50% 20%, #2a2318 0%, #17140F 60%, #0d0b08 100%);
+    display:flex; align-items:center; justify-content:center;
+    padding:32px 20px; overflow-y:auto;
+  }
+  #portal[hidden]{ display:none; }
+  .portal-inner{
+    max-width:520px; width:100%; text-align:center;
+    animation: portalIn 0.7s ease;
+  }
+  @keyframes portalIn{ from{opacity:0; transform:translateY(12px);} to{opacity:1; transform:none;} }
+  .portal-eyebrow{
+    font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:0.28em;
+    text-transform:uppercase; color:var(--ember); margin-bottom:20px;
+  }
+  /* Placeholder art slots — two testable variants; real artwork drops in later */
+  .portal-variant-toggle{
+    display:inline-flex; gap:4px; margin-bottom:22px; border:1px solid var(--line);
+    border-radius:999px; padding:3px;
+  }
+  .portal-variant-toggle button{
+    background:transparent; border:none; color:var(--parchment-dim);
+    font-family:'JetBrains Mono', monospace; font-size:10.5px; letter-spacing:0.08em;
+    text-transform:uppercase; padding:7px 14px; border-radius:999px;
+  }
+  .portal-variant-toggle button.active{ background:var(--ember); color:#1B1310; }
+  .portal-art{
+    position:relative; width:220px; height:220px; margin:0 auto 26px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .portal-art-ring{
+    position:absolute; inset:0; border-radius:50%;
+    border:1px solid var(--ember); opacity:0.55;
+    box-shadow: 0 0 60px rgba(184,99,46,0.25), inset 0 0 50px rgba(184,99,46,0.18);
+    animation: breathe 5s ease-in-out infinite;
+  }
+  .portal-art-ring.r2{ inset:26px; opacity:0.3; animation-delay:0.6s; }
+  .portal-art-ring.r3{ inset:52px; opacity:0.18; animation-delay:1.2s; }
+  @keyframes breathe{ 0%,100%{transform:scale(1);} 50%{transform:scale(1.04);} }
+  .portal-art-label{
+    position:relative; z-index:2; font-family:'JetBrains Mono', monospace;
+    font-size:10px; letter-spacing:0.14em; text-transform:uppercase;
+    color:var(--parchment-dim); line-height:1.5;
+  }
+  .portal-art-gatekeeper{
+    position:absolute; z-index:2; bottom:0; width:96px; height:150px;
+    display:flex; flex-direction:column; align-items:center; justify-content:flex-end;
+  }
+  .gk-fig{ width:52px; height:110px; background:linear-gradient(180deg, var(--teal) 0%, #223840 100%);
+    border-radius:26px 26px 8px 8px; opacity:0.9; }
+  .gk-xolo{ width:60px; height:34px; margin-top:-6px; background:var(--ink);
+    border:1px solid var(--ember); border-radius:18px 18px 6px 14px; opacity:0.85; }
+  .portal-hidden-variant{ display:none !important; }
+  h1.portal-title{
+    font-family:'Fraunces', serif; font-weight:500; font-size:clamp(28px,5vw,40px);
+    line-height:1.1; margin:0 0 14px; color:var(--parchment);
+  }
+  .portal-lede{
+    font-size:14.5px; line-height:1.6; color:var(--parchment-dim);
+    max-width:40ch; margin:0 auto 28px;
+  }
+  .portal-form{ display:flex; flex-direction:column; gap:16px; text-align:left; }
+  .portal-field{ display:flex; flex-direction:column; gap:6px; }
+  .portal-field label{
+    font-family:'JetBrains Mono', monospace; font-size:10.5px; letter-spacing:0.08em;
+    text-transform:uppercase; color:var(--parchment-dim);
+  }
+  .portal-field input{
+    background:rgba(0,0,0,0.3); border:1px solid var(--line); color:var(--parchment);
+    padding:12px 13px; border-radius:3px; font-family:'Inter',sans-serif; font-size:14.5px;
+    width:100%;
+  }
+  .portal-field input:focus{ outline:2px solid var(--ember); outline-offset:2px; }
+  .portal-authenticity{
+    font-family:'JetBrains Mono', monospace; font-size:11px; line-height:1.6;
+    color:var(--ember); letter-spacing:0.02em; margin:4px 0 6px; text-align:center;
+  }
+  .portal-enter{
+    background:var(--ember); color:#1B1310; border:1px solid var(--ember);
+    font-family:'Inter',sans-serif; font-weight:600; font-size:15px; letter-spacing:0.02em;
+    padding:14px; border-radius:3px; cursor:pointer; margin-top:6px; transition:all 0.15s ease;
+  }
+  .portal-enter:hover{ background:#c8712f; }
+  .portal-enter:disabled{ opacity:0.4; cursor:not-allowed; }
+
+  /* ===================== TODAY / MATRIX ===================== */
+  .matrix-hero{
+    border:1px solid var(--line); border-radius:6px; padding:24px;
+    background:linear-gradient(135deg, rgba(184,99,46,0.08) 0%, rgba(51,80,90,0.06) 100%);
+    margin-bottom:20px;
+  }
+  .matrix-hero-top{ display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px; }
+  .matrix-date{ font-family:'Fraunces',serif; font-size:26px; color:var(--parchment); margin:0; line-height:1.15; }
+  .matrix-daylabel{ font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em;
+    text-transform:uppercase; color:var(--ember); margin:0 0 6px; }
+  .numerology-badge{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    width:70px; height:70px; border:1px solid var(--ember); border-radius:50%;
+    box-shadow:inset 0 0 24px rgba(184,99,46,0.2); flex-shrink:0;
+  }
+  .numerology-badge .num{ font-family:'Fraunces',serif; font-size:30px; color:var(--ember); line-height:1; }
+  .numerology-badge .num-lbl{ font-family:'JetBrains Mono',monospace; font-size:8px; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--parchment-dim); margin-top:3px; }
+  .matrix-numerology-meaning{ font-size:13.5px; color:var(--parchment-dim); line-height:1.55;
+    margin:16px 0 0; font-style:italic; }
+  .coord-strip{ display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; }
+  .coord-chip{
+    display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:999px;
+    padding:7px 14px; background:rgba(0,0,0,0.2);
+  }
+  .coord-chip .glyph{ font-size:16px; line-height:1; }
+  .coord-chip .ctxt{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--parchment-dim);
+    letter-spacing:0.04em; }
+  .coord-chip .ctxt b{ color:var(--parchment); font-weight:500; }
+
+  /* week strip */
+  .week-strip{ display:grid; grid-template-columns:repeat(7,1fr); gap:8px; margin-bottom:20px; }
+  .day-cell{
+    border:1px solid var(--line); border-radius:5px; padding:12px 8px; text-align:center;
+    cursor:pointer; transition:all 0.15s ease; background:rgba(243,236,221,0.02);
+  }
+  .day-cell:hover{ border-color:var(--parchment-dim); }
+  .day-cell.active{ border-color:var(--ember); background:var(--ember-soft); }
+  .day-cell .dow{ font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:0.06em;
+    text-transform:uppercase; color:var(--parchment-dim); }
+  .day-cell.active .dow{ color:var(--ember); }
+  .day-cell .dnum{ font-family:'Fraunces',serif; font-size:20px; color:var(--parchment); margin:4px 0; }
+  .day-cell .pmove{ font-family:'JetBrains Mono',monospace; font-size:8.5px; letter-spacing:0.03em;
+    text-transform:uppercase; color:var(--parchment-dim); line-height:1.3; min-height:22px; }
+  .day-cell.active .pmove{ color:var(--parchment); }
+  .day-cell.today-marker{ position:relative; }
+  .day-cell.today-marker::after{ content:''; position:absolute; top:5px; right:5px; width:5px; height:5px;
+    border-radius:50%; background:var(--ember); }
+
+  .powermove-banner{
+    border:1px solid var(--ember); border-left-width:3px; border-radius:5px; padding:18px 20px;
+    background:rgba(184,99,46,0.06); margin-bottom:20px;
+  }
+  .powermove-banner .pm-eyebrow{ font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.16em;
+    text-transform:uppercase; color:var(--ember); margin:0 0 8px; }
+  .powermove-banner .pm-word{ font-family:'Fraunces',serif; font-size:30px; color:var(--parchment); margin:0 0 8px; }
+  .powermove-banner .pm-desc{ font-size:14px; color:var(--parchment-dim); line-height:1.6; margin:0; }
+
+  /* split schedule: planned vs actual */
+  .split-sched{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:560px){ .split-sched{ grid-template-columns:1fr; } .week-strip{ grid-template-columns:repeat(4,1fr); } }
+  .sched-col-title{ font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:0.1em;
+    text-transform:uppercase; margin:0 0 12px; display:flex; align-items:center; gap:8px; }
+  .sched-col-title.planned{ color:var(--teal); }
+  .sched-col-title.actual{ color:var(--ember); }
+  .sched-block{
+    border:1px solid var(--line); border-radius:4px; padding:10px 12px; margin-bottom:8px;
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+  }
+  .sched-block .sb-time{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--parchment-dim);
+    flex-shrink:0; }
+  .sched-block .sb-label{ font-size:13.5px; color:var(--parchment); }
+  .sched-block.planned-block{ border-left:2px solid var(--teal); }
+  .sched-block.actual-block{ border-left:2px solid var(--ember); }
+  .sched-block.empty-actual{ opacity:0.5; font-style:italic; }
+  .sched-block .sb-remove{ background:none; border:none; color:var(--parchment-dim); cursor:pointer;
+    font-size:16px; padding:0 4px; }
+  .sched-block .sb-remove:hover{ color:var(--ember); }
+  .sched-add-row{ display:flex; gap:6px; margin-top:8px; }
+  .sched-add-row input{ background:rgba(0,0,0,0.25); border:1px solid var(--line); color:var(--parchment);
+    padding:7px 8px; border-radius:3px; font-size:12.5px; font-family:'Inter',sans-serif; }
+  .sched-add-row input.sb-time-in{ width:78px; font-family:'JetBrains Mono',monospace; }
+  .sched-add-row input.sb-label-in{ flex:1; min-width:0; }
+  .sched-add-row button{ padding:7px 12px; font-size:12px; }
+  .friction-note{ font-size:12.5px; color:var(--parchment-dim); line-height:1.6; font-style:italic;
+    border-top:1px solid var(--line); padding-top:14px; margin-top:16px; }
 </style>
 </head>
 <body>
+
+<!-- ===================== PORTAL / ENTRY GATE ===================== -->
+<div id="portal">
+  <div class="portal-inner">
+    <div class="portal-eyebrow">L O O B</div>
+
+    <div class="portal-variant-toggle" id="portalVariantToggle">
+      <button data-variant="symbol" class="active">Portal symbol</button>
+      <button data-variant="gatekeeper">Gatekeeper + Xolo</button>
+    </div>
+
+    <!-- Variant A: raw portal symbol (placeholder art) -->
+    <div class="portal-art" id="portalArtSymbol">
+      <div class="portal-art-ring"></div>
+      <div class="portal-art-ring r2"></div>
+      <div class="portal-art-ring r3"></div>
+      <div class="portal-art-label">[ portal<br>artwork ]</div>
+    </div>
+
+    <!-- Variant B: gatekeeper standing before the portal with Xolo (placeholder art) -->
+    <div class="portal-art portal-hidden-variant" id="portalArtGatekeeper">
+      <div class="portal-art-ring"></div>
+      <div class="portal-art-ring r2"></div>
+      <div class="portal-art-gatekeeper">
+        <div class="gk-fig"></div>
+        <div class="gk-xolo"></div>
+      </div>
+      <div class="portal-art-label" style="position:absolute;top:8px;">[ gatekeeper<br>+ Xolo ]</div>
+    </div>
+
+    <h1 class="portal-title">Cross with your true coordinates.</h1>
+    <p class="portal-lede">
+      To pass through, give the exact moment and place you entered the world.
+      Nothing is uploaded — these anchor your chart on this device only.
+    </p>
+
+    <div class="portal-form">
+      <div class="portal-field">
+        <label for="birthDate">Date of birth</label>
+        <input type="date" id="birthDate">
+      </div>
+      <div class="portal-field">
+        <label for="birthTime">Time of birth</label>
+        <input type="time" id="birthTime">
+      </div>
+      <div class="portal-field">
+        <label for="birthPlace">Location of birth</label>
+        <input type="text" id="birthPlace" placeholder="City, country">
+      </div>
+
+      <p class="portal-authenticity">
+        Enter it exactly. Wrong information gives wrong results —<br>the system asks for total authenticity from the start.
+      </p>
+
+      <button class="portal-enter" id="portalEnterBtn">Enter</button>
+      <p id="portalError" style="display:none; color:var(--ember); font-family:'JetBrains Mono',monospace; font-size:11.5px; text-align:center; margin:10px 0 0;"></p>
+    </div>
+  </div>
+</div>
+
+<!-- Portal boot: a small, dependency-free script that runs on its own, so the
+     entry gate works even if the on-device model CDN is slow or unreachable. -->
+<script>
+(function () {
+  function boot() {
+    var PORTAL_KEY = "loob-birth-data";
+    var portal = document.getElementById("portal");
+    var birthDate = document.getElementById("birthDate");
+    var birthTime = document.getElementById("birthTime");
+    var birthPlace = document.getElementById("birthPlace");
+    var enterBtn = document.getElementById("portalEnterBtn");
+    var errEl = document.getElementById("portalError");
+
+    if (!portal || !birthDate || !birthTime || !birthPlace || !enterBtn) {
+      // Elements not ready yet — try again shortly rather than failing silently.
+      return setTimeout(boot, 50);
+    }
+
+    // The button is ALWAYS clickable. Validation happens on click and shows an
+    // inline message naming exactly what's missing — so the button can never get
+    // "stuck" disabled by an autofill, paste, or date-picker event we didn't hear.
+    enterBtn.disabled = false;
+
+    function readStored() {
+      try { return JSON.parse(localStorage.getItem(PORTAL_KEY) || "null"); }
+      catch (e) { return null; }
+    }
+    function store(d) {
+      try { localStorage.setItem(PORTAL_KEY, JSON.stringify(d)); } catch (e) {}
+    }
+    function showError(msg) {
+      if (errEl) { errEl.textContent = msg; errEl.style.display = msg ? "block" : "none"; }
+    }
+    // Clear the error as the person fills fields back in.
+    ["input", "change", "keyup"].forEach(function (evt) {
+      [birthDate, birthTime, birthPlace].forEach(function (el) {
+        el.addEventListener(evt, function () { showError(""); });
+      });
+    });
+
+    // Variant toggle (placeholder art: portal symbol vs. gatekeeper + Xolo)
+    var toggle = document.getElementById("portalVariantToggle");
+    if (toggle) {
+      toggle.addEventListener("click", function (ev) {
+        var btn = ev.target.closest ? ev.target.closest("button[data-variant]") : null;
+        if (!btn) return;
+        var btns = toggle.querySelectorAll("button");
+        for (var i = 0; i < btns.length; i++) btns[i].classList.remove("active");
+        btn.classList.add("active");
+        var symbol = btn.getAttribute("data-variant") === "symbol";
+        document.getElementById("portalArtSymbol").classList.toggle("portal-hidden-variant", !symbol);
+        document.getElementById("portalArtGatekeeper").classList.toggle("portal-hidden-variant", symbol);
+      });
+    }
+
+    function proceed(data) {
+      window.LOOB_birthData = data;
+      portal.hidden = true;
+      if (typeof window.LOOB_enterApp === "function") {
+        window.LOOB_enterApp(data);
+      } else {
+        window.LOOB_pendingEnter = true;
+      }
+    }
+
+    enterBtn.addEventListener("click", function () {
+      var missing = [];
+      if (!birthDate.value) missing.push("date of birth");
+      if (!birthTime.value) missing.push("time of birth");
+      if (!birthPlace.value.trim()) missing.push("location of birth");
+      if (missing.length) {
+        showError("Still needed: " + missing.join(", ") + ".");
+        return;
+      }
+      showError("");
+      var data = {
+        date: birthDate.value,
+        time: birthTime.value,
+        place: birthPlace.value.trim(),
+      };
+      store(data);
+      proceed(data);
+    });
+
+    // Returning visitor: skip the gate if complete birth data is already stored.
+    var existing = readStored();
+    if (existing && existing.date && existing.time && existing.place) {
+      proceed(existing);
+    } else {
+      portal.hidden = false;
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
+})();
+</script>
+
 <div class="wrap">
 
-  <div class="eyebrow">LOOB · engineering prototype</div>
+  <div class="eyebrow">LOOB · <span id="portalGreeting">your local portal</span></div>
   <h1>A transcript with no clock on it.</h1>
   <p class="lede">
-    This runs Whisper small entirely in your browser tab. <b>No server, no upload</b> —
-    audio is decoded and transcribed on this device, in any of the ~99 languages
-    Whisper small was trained on, for recordings of any length. Transcripts can now be
-    saved as <b>entries</b> — edited, annotated with notes, and browsed in the Library —
-    stored in this browser, on this device, and nowhere else.
+    Your week and your diary live here — on this device, nowhere else. <b>No server, no upload.</b>
+    Voice notes are transcribed by Whisper running inside this browser tab, then saved as
+    <b>entries</b> in a local story bank you can edit, annotate, and browse.
   </p>
 
   <div class="tabs">
-    <button class="tab active" id="tabCapture">Capture</button>
-    <button class="tab" id="tabLibrary">Library · <span id="libCount">0</span></button>
+    <button class="tab active" id="tabToday">Today</button>
+    <button class="tab" id="tabCapture">Diary · Capture</button>
+    <button class="tab" id="tabLibrary">Story bank · <span id="libCount">0</span></button>
   </div>
 
-  <div id="viewCapture">
+  <!-- ===================== TODAY / MATRIX VIEW ===================== -->
+  <div id="viewToday">
+    <div class="matrix-hero">
+      <div class="matrix-hero-top">
+        <div>
+          <p class="matrix-daylabel" id="matrixDayLabel">—</p>
+          <h2 class="matrix-date" id="matrixDate">—</h2>
+        </div>
+        <div class="numerology-badge">
+          <span class="num" id="matrixNumerology">—</span>
+          <span class="num-lbl">Numerology</span>
+        </div>
+      </div>
+      <p class="matrix-numerology-meaning" id="matrixNumerologyMeaning">—</p>
+      <div class="coord-strip" id="coordStrip"></div>
+    </div>
+
+    <div class="panel" style="padding:20px;">
+      <p class="panel-title">The week · starts Sunday</p>
+      <div class="week-strip" id="weekStrip"></div>
+
+      <div class="powermove-banner">
+        <p class="pm-eyebrow">Power move for this day</p>
+        <p class="pm-word" id="powerMoveWord">—</p>
+        <p class="pm-desc" id="powerMoveDesc">—</p>
+      </div>
+    </div>
+
+    <div class="panel" style="padding:20px;">
+      <p class="panel-title">Planned intention vs. real-time execution</p>
+      <div class="split-sched">
+        <div>
+          <p class="sched-col-title planned"><span>◇</span> Planned</p>
+          <div id="plannedBlocks"></div>
+          <div class="sched-add-row">
+            <input type="time" class="sb-time-in" id="plannedTimeIn">
+            <input type="text" class="sb-label-in" id="plannedLabelIn" placeholder="Sleep, morning routine, flow state…">
+            <button class="ghost" id="addPlannedBtn">Add</button>
+          </div>
+        </div>
+        <div>
+          <p class="sched-col-title actual"><span>●</span> Actual</p>
+          <div id="actualBlocks"></div>
+          <div class="sched-add-row">
+            <input type="time" class="sb-time-in" id="actualTimeIn">
+            <input type="text" class="sb-label-in" id="actualLabelIn" placeholder="What actually happened…">
+            <button class="ghost" id="addActualBtn">Add</button>
+          </div>
+        </div>
+      </div>
+      <p class="friction-note">
+        This split exposes the friction between intention and action in real time — the gap
+        between the day you planned and the day you lived.
+      </p>
+    </div>
+  </div><!-- /viewToday -->
+
+  <div id="viewCapture" hidden>
 
   <div class="panel">
     <p class="panel-title">Model status</p>
@@ -580,6 +994,14 @@
         <p class="panel-title">Saved entries</p>
         <input type="search" class="search-input" id="librarySearch"
                placeholder="Search titles, transcripts, notes, tags, and life eras…">
+        <div class="actions-row" style="margin:12px 0 0;">
+          <button class="ghost" id="exportAllEntriesBtn">Export all entries (.json)</button>
+        </div>
+        <p class="hint">
+          Downloads every saved entry — transcripts, timestamps, life era, tags, notes, and AI
+          reflections/threads — as one JSON file to this device. Nothing is uploaded; it's a local
+          backup you keep yourself.
+        </p>
         <div id="entryList"></div>
       </div>
     </div>
@@ -631,11 +1053,16 @@
             <button class="primary" id="saveChangesBtn" disabled>Save changes</button>
             <button class="ghost" id="restoreOriginalBtn" hidden>Restore original transcript</button>
             <button class="ghost" id="detailCopyBtn">Copy transcript</button>
+            <button class="ghost" id="downloadEntryBtn">Download entry (.txt)</button>
             <button class="danger" id="deleteEntryBtn">Delete entry</button>
           </div>
           <p class="hint">
             Edits overwrite the working transcript but the original, as-transcribed text is kept
             with the entry — "Restore original transcript" brings it back at any time.
+          </p>
+          <p class="hint">
+            "Download entry" saves a plain-text copy of this entry — timestamp, life era, where,
+            tags, transcript, notes, and any AI reflections and their threads — to this device.
           </p>
         </div>
       </div>
@@ -670,7 +1097,9 @@
           WebLLM</b> when your browser supports it (nothing sent anywhere, not even to
           <code>localhost</code>) — otherwise falls back to a model running locally via Ollama.
           This and the optional Myth-scan below are the only features in LOOB that use either of
-          these; everything else stays fully offline.
+          these; everything else stays fully offline. Each reflection below can become its own
+          thread — reply by typing or by recording a short voice note, then ask for another AI
+          response to keep sitting with it.
         </p>
         <div class="controls-grid ai-settings-grid">
           <div class="field" id="webllmModelField">
@@ -777,6 +1206,7 @@ const detailTitle = $("detailTitle"), detailMeta = $("detailMeta"), detailTransc
 const saveChangesBtn = $("saveChangesBtn"), restoreOriginalBtn = $("restoreOriginalBtn");
 const detailCopyBtn = $("detailCopyBtn"), deleteEntryBtn = $("deleteEntryBtn"), editedBadge = $("editedBadge");
 const noteList = $("noteList"), noteInput = $("noteInput"), addNoteBtn = $("addNoteBtn");
+const downloadEntryBtn = $("downloadEntryBtn"), exportAllEntriesBtn = $("exportAllEntriesBtn");
 
 // text-entry + categorization + consent elements
 const writeEntryInput = $("writeEntryInput"), useWrittenTextBtn = $("useWrittenTextBtn");
@@ -1216,26 +1646,6 @@ function chunkAudio(float32, sampleRate = 16000, chunkS = 15, strideS = 3) {
   return chunks;
 }
 
-// Memory-frugal variant: instead of materialising every chunk's audio up front
-// and holding the whole array for the entire run (which, stacked on top of the
-// full recording and the ONNX runtime's per-call tensors, pushes iOS Safari
-// past its memory ceiling and gets the tab killed mid-transcription), this
-// returns just the [start, end) sample boundaries. The loop slices one chunk at
-// a time from these and frees it immediately after transcribing, so only a
-// single 15s chunk of audio is ever alive on top of the base recording.
-function chunkBoundaries(totalLen, sampleRate = 16000, chunkS = 15, strideS = 3) {
-  const chunkSize = chunkS * sampleRate;
-  const step = chunkSize - strideS * sampleRate;
-  const bounds = [];
-  if (totalLen <= chunkSize) { bounds.push([0, totalLen]); return bounds; }
-  for (let start = 0; start < totalLen; start += step) {
-    const end = Math.min(start + chunkSize, totalLen);
-    bounds.push([start, end]);
-    if (end >= totalLen) break;
-  }
-  return bounds;
-}
-
 // Each chunk gets its own independent transcriber() call, so each one
 // re-detects language rather than inheriting a single guess for the whole
 // recording (which is what the pipeline's built-in chunk_length_s does —
@@ -1266,10 +1676,8 @@ async function transcribeFloat32(rawFloat32) {
   // actually holds the real final words to a middle chunk whose tail gets
   // trimmed after all. Capping the pad to the available headroom means
   // padding can never change how many chunks there are.
-  // Boundaries only (cheap — just index pairs), so we don't hold a second
-  // full overlapping copy of the audio as a chunk array for the whole run.
-  const rawBounds = chunkBoundaries(rawFloat32.length, sampleRate, chunkS, strideS);
-  const lastRawChunkLen = rawBounds[rawBounds.length - 1][1] - rawBounds[rawBounds.length - 1][0];
+  const rawChunks = chunkAudio(rawFloat32, sampleRate, chunkS, strideS);
+  const lastRawChunkLen = rawChunks[rawChunks.length - 1].length;
   const headroomSamples = chunkSizeSamples - lastRawChunkLen;
 
   let float32 = rawFloat32;
@@ -1281,13 +1689,13 @@ async function transcribeFloat32(rawFloat32) {
     float32 = padded;
   }
 
-  const bounds = chunkBoundaries(float32.length, sampleRate, chunkS, strideS);
-  if (bounds.length !== rawBounds.length) {
+  const chunks = chunkAudio(float32, sampleRate, chunkS, strideS);
+  if (chunks.length !== rawChunks.length) {
     // Should be structurally impossible given the headroom cap above, but
     // logged rather than assumed — if this ever fires, the cap itself has a
     // bug and the last chunk's classification can no longer be trusted.
     console.warn(
-      `Padding changed chunk count (${rawBounds.length} -> ${bounds.length}) — ` +
+      `Padding changed chunk count (${rawChunks.length} -> ${chunks.length}) — ` +
       `the last-chunk headroom cap did not behave as expected.`
     );
   }
@@ -1390,12 +1798,8 @@ async function transcribeFloat32(rawFloat32) {
     });
   }
 
-  for (let i = 0; i < bounds.length; i++) {
-    chunkProgress.textContent = `Processing chunk ${i + 1} of ${bounds.length}…`;
-    // Slice just this chunk's audio now, and free it at the end of the
-    // iteration — only one 15s chunk is ever alive on top of the base
-    // recording, which is what keeps a long recording under iOS's memory cap.
-    let chunkData = float32.slice(bounds[i][0], bounds[i][1]);
+  for (let i = 0; i < chunks.length; i++) {
+    chunkProgress.textContent = `Processing chunk ${i + 1} of ${chunks.length}…`;
     // Shared generation settings: no_repeat_ngram_size and repetition_penalty
     // mitigate Whisper's known repetition/hallucination failure mode (getting
     // stuck looping a phrase) — more likely with 15s windows, since a short
@@ -1413,7 +1817,7 @@ async function transcribeFloat32(rawFloat32) {
     try {
       if (!hybridMode) {
         // Single fixed language — no detection needed at all, one pass.
-        result = await transcribeWithLanguage(chunkData, primaryLang, genKwargsBase);
+        result = await transcribeWithLanguage(chunks[i], primaryLang, genKwargsBase);
       } else {
         // Hybrid mode: try both candidates explicitly, keep whichever
         // result actually matches its own target language.
@@ -1422,7 +1826,7 @@ async function transcribeFloat32(rawFloat32) {
         for (const candidateLang of candidates) {
           let candidateResult;
           try {
-            candidateResult = await transcribeWithLanguage(chunkData, candidateLang, genKwargsBase);
+            candidateResult = await transcribeWithLanguage(chunks[i], candidateLang, genKwargsBase);
           } catch (err) {
             logDebug(`Chunk ${i + 1}: candidate "${candidateLang}" failed (${err.message}), skipping it.`);
             continue;
@@ -1447,18 +1851,18 @@ async function transcribeFloat32(rawFloat32) {
         lastDetectedLang = languageCode;
       }
     } catch (err) {
-      console.error(`Chunk ${i + 1} of ${bounds.length} failed:`, err);
+      console.error(`Chunk ${i + 1} of ${chunks.length} failed:`, err);
       chunkProgress.textContent =
-        `Chunk ${i + 1} of ${bounds.length} failed (${err.message}) — continuing with the next chunk.`;
+        `Chunk ${i + 1} of ${chunks.length} failed (${err.message}) — continuing with the next chunk.`;
       transcriptText = (transcriptText + ` [chunk ${i + 1} failed: ${err.message}]`).trim();
       updateTranscript(transcriptText);
       failedChunks++;
       continue;
     }
 
-    const chunkDuration = chunkData.length / sampleRate;
+    const chunkDuration = chunks[i].length / sampleRate;
     const isFirst = i === 0;
-    const isLast = i === bounds.length - 1;
+    const isLast = i === chunks.length - 1;
     const localStart = isFirst ? 0 : strideS / 2;
     const localEnd = isLast ? chunkDuration : Math.max(localStart, chunkDuration - strideS / 2);
 
@@ -1511,26 +1915,16 @@ async function transcribeFloat32(rawFloat32) {
     transcriptText = merge.text;
 
     updateTranscript(transcriptText);
-
-    // Drop this chunk's audio and the model result now so they can be
-    // reclaimed before the next iteration allocates the next chunk. Then
-    // yield to the event loop: this lets Safari actually run garbage
-    // collection and repaint, and — critically on iOS — prevents the tab's
-    // memory from ratcheting up across a long recording faster than the
-    // engine can release it, which was crashing the tab mid-run.
-    chunkData = null;
-    result = null;
-    await new Promise((r) => setTimeout(r, 0));
   }
 
   if (failedChunks > 0) {
     chunkProgress.textContent =
-      `Done — ${bounds.length} chunks, but ${failedChunks} failed and are marked inline above.`;
+      `Done — ${chunks.length} chunks, but ${failedChunks} failed and are marked inline above.`;
   } else if (usedFallback) {
     chunkProgress.textContent =
-      `Done — ${bounds.length} chunks, but at least one had no usable timestamps and used a rougher word-proportion trim instead.`;
+      `Done — ${chunks.length} chunks, but at least one had no usable timestamps and used a rougher word-proportion trim instead.`;
   } else {
-    chunkProgress.textContent = `Done — ${Math.round(durationS)}s of audio across ${bounds.length} chunks.`;
+    chunkProgress.textContent = `Done — ${Math.round(durationS)}s of audio across ${chunks.length} chunks.`;
   }
   lastTranscriptionMeta = {
     durationS: Math.round(durationS),
@@ -1746,6 +2140,95 @@ downloadAudioBtn.addEventListener("click", () => {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 });
 
+// ===================== local export / download of entries =====================
+// Two separate downloads, both fully local (no upload, no server):
+// - a single entry as human-readable plain text, including timestamp, life
+//   era, where, privacy, tags, transcript, notes, and AI reflections/threads
+// - every saved entry at once as one JSON file (a straightforward backup /
+//   later-reimport format), from the Library view.
+function downloadBlob(filename, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+function slugify(s) {
+  return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "entry";
+}
+
+function formatEntryForExport(e) {
+  const lines = [];
+  lines.push("LOOB journal entry");
+  lines.push("===================");
+  lines.push(`Title: ${e.title || "Untitled entry"}`);
+  lines.push(`Saved: ${fmtDate(e.createdAt)}`);
+  lines.push(`When: ${fmtDate(e.when || e.createdAt)}`);
+  lines.push(`Life era: ${e.lifeEra || "Unspecified"}`);
+  if (e.where) lines.push(`Where: ${e.where}`);
+  lines.push(`Privacy: ${e.private === false ? "Shareable" : "Private"}`);
+  if (e.tags && e.tags.length) lines.push(`Tags: ${e.tags.join(", ")}`);
+  const words = (e.transcript || "").trim() ? e.transcript.trim().split(/\s+/).length : 0;
+  lines.push(`Word count: ${words}`);
+  if (e.meta) {
+    if (e.meta.durationS != null) lines.push(`Recording length: ${e.meta.durationS}s`);
+    if (e.meta.languages && e.meta.languages.length) {
+      lines.push(`Language(s): ${e.meta.languages.map((c) => WHISPER_LANGUAGES[c] || c).join(" + ")}`);
+    }
+    if (e.meta.source) lines.push(`Source: ${e.meta.source}`);
+  }
+
+  lines.push("", "--- Transcript ---", e.transcript || "");
+  if (e.transcript !== e.originalTranscript) {
+    lines.push("", "--- Original (as-transcribed) transcript ---", e.originalTranscript || "");
+  }
+
+  if (e.notes && e.notes.length) {
+    lines.push("", "--- Notes ---");
+    for (const n of e.notes) lines.push(`[${fmtDate(n.createdAt)}] ${n.text}`);
+  }
+
+  if (e.reflections && e.reflections.length) {
+    lines.push("", "--- AI reflections ---");
+    for (const r of e.reflections) {
+      lines.push(`[${fmtDate(r.createdAt)}] (${r.engine || "?"} · ${r.model || "?"})`, r.text);
+      for (const m of (r.thread || [])) {
+        const who = m.role === "user" ? "You" : "AI";
+        const src = m.source === "voice" ? " · voice" : "";
+        lines.push(`  [${fmtDate(m.createdAt)}] ${who}${src}: ${m.text}`);
+      }
+      lines.push("");
+    }
+  }
+  return lines.join("\n");
+}
+
+downloadEntryBtn.addEventListener("click", () => {
+  const e = getEntry(openEntryId);
+  if (!e) return;
+  const stamp = new Date(e.when || e.createdAt).toISOString().slice(0, 10);
+  const eraPart = e.lifeEra && e.lifeEra !== "Unspecified" ? `-${slugify(e.lifeEra)}` : "";
+  downloadBlob(`loob-entry-${stamp}${eraPart}-${slugify(e.title)}.txt`, formatEntryForExport(e), "text/plain");
+});
+
+exportAllEntriesBtn.addEventListener("click", () => {
+  if (!cachedEntries.length) return;
+  const stamp = new Date().toISOString().slice(0, 10);
+  const payload = {
+    app: "LOOB",
+    exportVersion: 1,
+    exportedAt: new Date().toISOString(),
+    entryCount: cachedEntries.length,
+    entries: cachedEntries,
+  };
+  downloadBlob(`loob-journal-export-${stamp}.json`, JSON.stringify(payload, null, 2), "application/json");
+});
+
 // ===================== entry storage (IndexedDB) =====================
 // Entries live in this browser's IndexedDB for this origin — on-device,
 // no network involvement, consistent with the local-first claim. Each
@@ -1788,6 +2271,19 @@ const uid = () => (crypto.randomUUID
 
 let cachedEntries = [];
 let openEntryId = null;
+// Which reflection (by id) currently has its thread panel expanded in the
+// detail view — only one at a time, mirroring the rest of the UI's
+// one-thing-open-at-a-time style.
+let openThreadReflectionId = null;
+// Recording state for voice replies inside a reflection thread. Kept
+// separate from the main capture recorder's state (recStream etc.) so a
+// thread reply can never interfere with — or be interfered with by —
+// whatever's happening on the Capture tab.
+let threadRecStream = null, threadRecSourceNode = null, threadRecProcessorNode = null, threadRecSilentGain = null;
+let threadRecPcmChunks = [];
+let threadRecording = false;
+let threadRecTimerInterval = null;
+let threadRecStart = 0;
 
 async function refreshEntries() {
   try {
@@ -1817,6 +2313,8 @@ function entryMetaLine(e) {
   if (e.notes.length) parts.push(`${e.notes.length} note${e.notes.length === 1 ? "" : "s"}`);
   if (e.reflections && e.reflections.length) {
     parts.push(`${e.reflections.length} reflection${e.reflections.length === 1 ? "" : "s"}`);
+    const threadTotal = e.reflections.reduce((sum, r) => sum + ((r.thread || []).length), 0);
+    if (threadTotal) parts.push(`${threadTotal} thread repl${threadTotal === 1 ? "y" : "ies"}`);
   }
   const mythCount = mergeMythLists(e).length;
   if (mythCount) parts.push(`${mythCount} myth${mythCount === 1 ? "" : "s"} flagged`);
@@ -1884,22 +2382,307 @@ saveEntryBtn.addEventListener("click", async () => {
 });
 
 // ===================== view switching =====================
+const viewToday = document.getElementById("viewToday");
+const tabToday = document.getElementById("tabToday");
+
+function setActiveTab(activeTabEl) {
+  [tabToday, tabCapture, tabLibrary].forEach((t) => t.classList.remove("active"));
+  activeTabEl.classList.add("active");
+}
+function showToday() {
+  viewToday.hidden = false;
+  viewCapture.hidden = true;
+  viewLibrary.hidden = true;
+  setActiveTab(tabToday);
+  renderMatrix();
+}
 function showCapture() {
+  viewToday.hidden = true;
   viewCapture.hidden = false;
   viewLibrary.hidden = true;
-  tabCapture.classList.add("active");
-  tabLibrary.classList.remove("active");
+  setActiveTab(tabCapture);
 }
 function showLibrary() {
+  viewToday.hidden = true;
   viewCapture.hidden = true;
   viewLibrary.hidden = false;
-  tabLibrary.classList.add("active");
-  tabCapture.classList.remove("active");
+  setActiveTab(tabLibrary);
   closeDetail();
   renderEntryList();
 }
+tabToday.addEventListener("click", showToday);
 tabCapture.addEventListener("click", showCapture);
 tabLibrary.addEventListener("click", showLibrary);
+
+// ===================== PORTAL: birth-data gate =====================
+// Birth coordinates are the app's authenticity anchor. Stored on-device only
+// (localStorage for this origin) — never uploaded, consistent with the
+// no-server model. They seed the chart shown on the Today matrix.
+// The portal gate itself is wired in a separate, dependency-free inline script
+// (see #portal-boot) so it can never be blocked by the model CDN import above.
+// That boot script hands the confirmed birth data to the module via a callback.
+let birthData = (window.LOOB_birthData || null);
+
+function enterAppFromPortal(data) {
+  birthData = data;
+  const portalGreeting = document.getElementById("portalGreeting");
+  if (birthData && birthData.place && portalGreeting) {
+    portalGreeting.textContent = birthData.place.split(",")[0].trim().toLowerCase() + " · local portal";
+  }
+  // Never let a rendering hiccup trap the user behind the portal — the boot
+  // script has already hidden it, but make the app-view switch fault-tolerant.
+  try {
+    showToday();
+  } catch (err) {
+    console.error("Today view failed to render:", err);
+    const p = document.getElementById("portal");
+    if (p) p.hidden = true;
+    if (viewToday) viewToday.hidden = false;
+  }
+}
+// Expose so the boot script can call into the module once it has loaded.
+window.LOOB_enterApp = enterAppFromPortal;
+// If the boot script already collected/loaded birth data before this module
+// finished importing, honor it — but defer to a microtask so every const/let
+// declaration below (POWER_MOVES, matrixSelectedDate, renderMatrix, …) exists
+// before enterAppFromPortal → showToday → renderMatrix runs.
+if (window.LOOB_birthData && window.LOOB_pendingEnter) {
+  Promise.resolve().then(() => enterAppFromPortal(window.LOOB_birthData));
+}
+
+// ===================== NUMEROLOGY / CHART math =====================
+// Rule-based, on-device — same spirit as tag suggestions and Myth vs Truth:
+// no network, no AI call, pure computation from the date the user is viewing.
+function reduceToDigit(n) {
+  // Reduce to a single digit (master numbers 11/22/33 kept, then shown reduced).
+  while (n > 9 && n !== 11 && n !== 22 && n !== 33) {
+    n = String(n).split("").reduce((a, d) => a + (+d), 0);
+  }
+  return n;
+}
+// The day's numerology comes from the WEEK NUMBER of the year, reduced to a
+// single digit. Weeks are Sunday-start (matching the matrix), and week 1 is the
+// week containing 1 January. This is the client's framework formula — e.g.
+// 26 July 2026 falls in week 31 → 3 + 1 = 4 (foundation, discipline, constancy).
+function weekNumberSunday(d) {
+  const jan1 = new Date(d.getFullYear(), 0, 1);
+  // The Sunday on or before Jan 1 anchors week 1.
+  const firstSunday = new Date(jan1);
+  firstSunday.setDate(jan1.getDate() - jan1.getDay()); // getDay(): 0 = Sunday
+  const viewed = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.floor((viewed - firstSunday) / 86400000);
+  return Math.floor(diffDays / 7) + 1;
+}
+function numerologyOfDate(d) {
+  return reduceToDigit(weekNumberSunday(d));
+}
+const NUMEROLOGY_MEANING = {
+  1: "Initiation and the singular self — the day to begin.",
+  2: "Balance and partnership — the day to attune to others.",
+  3: "Expression and creativity — the day the voice wants out.",
+  4: "Foundation, discipline, and constancy — the day to build the ground you stand on.",
+  5: "Change and motion — the day that refuses to sit still.",
+  6: "Care and responsibility — the day that tends to what it loves.",
+  7: "Reflection and inner search — the day to go quiet and look.",
+  8: "Power and consequence — the day where effort meets its return.",
+  9: "Completion and release — the day to let a cycle close.",
+  11: "Illumination — a master day of heightened intuition.",
+  22: "The master builder — a day to make the vision material.",
+  33: "The master teacher — a day of devotion beyond the self.",
+};
+
+// Lunar phase — simple synodic-month approximation (good enough for an interface
+// cue, not an ephemeris). Anchored to a known new moon.
+function lunarPhase(d) {
+  const synodic = 29.53058867;
+  const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14) / 86400000; // days since epoch
+  const days = d.getTime() / 86400000;
+  let age = ((days - knownNewMoon) % synodic + synodic) % synodic;
+  const phases = [
+    { max: 1.84566, name: "New Moon", glyph: "🌑" },
+    { max: 5.53699, name: "Waxing Crescent", glyph: "🌒" },
+    { max: 9.22831, name: "First Quarter", glyph: "🌓" },
+    { max: 12.91963, name: "Waxing Gibbous", glyph: "🌔" },
+    { max: 16.61096, name: "Full Moon", glyph: "🌕" },
+    { max: 20.30228, name: "Waning Gibbous", glyph: "🌖" },
+    { max: 23.99361, name: "Last Quarter", glyph: "🌗" },
+    { max: 27.68493, name: "Waning Crescent", glyph: "🌘" },
+  ];
+  for (const p of phases) if (age < p.max) return p;
+  return { name: "New Moon", glyph: "🌑" };
+}
+
+// Sun sign for the viewed date — the astrological coordinate shown in the strip.
+function sunSign(d) {
+  const m = d.getMonth() + 1, day = d.getDate();
+  const ranges = [
+    ["Capricorn", "♑", [12, 22], [1, 19]], ["Aquarius", "♒", [1, 20], [2, 18]],
+    ["Pisces", "♓", [2, 19], [3, 20]], ["Aries", "♈", [3, 21], [4, 19]],
+    ["Taurus", "♉", [4, 20], [5, 20]], ["Gemini", "♊", [5, 21], [6, 20]],
+    ["Cancer", "♋", [6, 21], [7, 22]], ["Leo", "♌", [7, 23], [8, 22]],
+    ["Virgo", "♍", [8, 23], [9, 22]], ["Libra", "♎", [9, 23], [10, 22]],
+    ["Scorpio", "♏", [10, 23], [11, 21]], ["Sagittarius", "♐", [11, 22], [12, 21]],
+  ];
+  for (const [name, glyph, [sm, sd], [em, ed]] of ranges) {
+    if (sm === em) { if (m === sm && day >= sd && day <= ed) return { name, glyph }; }
+    else { if ((m === sm && day >= sd) || (m === em && day <= ed)) return { name, glyph }; }
+  }
+  return { name: "Capricorn", glyph: "♑" };
+}
+
+// ===================== POWER MOVES (fixed framework, Sun→Sat) =====================
+// These are part of the client's framework and do not change.
+const POWER_MOVES = [
+  { word: "Acknowledgment", desc: "See it plainly. Name what is actually here before anything else moves." },
+  { word: "Belief", desc: "Decide what you hold to be true — the ground the rest of the week stands on." },
+  { word: "Choice", desc: "Out of everything possible, choose. The commitment is the work." },
+  { word: "Discipline", desc: "Return to it whether or not you feel like it. Constancy over mood." },
+  { word: "Expansion", desc: "Widen the frame. Let the practice reach past its usual edge." },
+  { word: "Feel", desc: "Drop out of the head and into the body. Let the day be felt, not just run." },
+  { word: "Going for it", desc: "No more rehearsal. Move at full commitment toward the thing." },
+];
+const DOW_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DOW_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+// ===================== SCHEDULE (planned vs actual) storage =====================
+// Per-day, on-device. Keyed by ISO date so each day keeps its own split.
+function dayKey(d) {
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function loadSchedule(key) {
+  try { return JSON.parse(localStorage.getItem("loob-sched-" + key) || "null") || { planned: [], actual: [] }; }
+  catch { return { planned: [], actual: [] }; }
+}
+function saveSchedule(key, sched) {
+  try { localStorage.setItem("loob-sched-" + key, JSON.stringify(sched)); } catch (e) {}
+}
+
+let matrixSelectedDate = new Date();
+
+function startOfWeekSunday(d) {
+  const x = new Date(d);
+  x.setHours(0,0,0,0);
+  x.setDate(x.getDate() - x.getDay()); // getDay(): 0 = Sunday
+  return x;
+}
+
+function renderMatrix() {
+  const sel = matrixSelectedDate;
+  const today = new Date();
+  const weekNo = weekNumberSunday(sel);
+  const num = reduceToDigit(weekNo);
+
+  document.getElementById("matrixDayLabel").textContent =
+    DOW_LONG[sel.getDay()] + " · power move: " + POWER_MOVES[sel.getDay()].word;
+  document.getElementById("matrixDate").textContent =
+    sel.getDate() + " " + MONTHS[sel.getMonth()] + " " + sel.getFullYear();
+  document.getElementById("matrixNumerology").textContent = num;
+  document.getElementById("matrixNumerologyMeaning").textContent =
+    "Week " + weekNo + " of the year → " + num + " — " + (NUMEROLOGY_MEANING[num] || "");
+
+  // coordinate strip: lunar + astro + numerology
+  const lunar = lunarPhase(sel);
+  const sign = sunSign(sel);
+  const strip = document.getElementById("coordStrip");
+  strip.textContent = "";
+  const chips = [
+    { glyph: lunar.glyph, txt: "Lunar", val: lunar.name },
+    { glyph: sign.glyph, txt: "Sun", val: sign.name },
+    { glyph: "✦", txt: "Numerology", val: num + " (wk " + weekNo + ")" },
+  ];
+  for (const c of chips) {
+    const el = document.createElement("div");
+    el.className = "coord-chip";
+    const g = document.createElement("span"); g.className = "glyph"; g.textContent = c.glyph;
+    const t = document.createElement("span"); t.className = "ctxt";
+    t.textContent = c.txt + " · ";
+    const b = document.createElement("b"); b.textContent = c.val;
+    t.appendChild(b);
+    el.appendChild(g); el.appendChild(t);
+    strip.appendChild(el);
+  }
+
+  // week strip (Sunday start)
+  const weekStart = startOfWeekSunday(sel);
+  const strip2 = document.getElementById("weekStrip");
+  strip2.textContent = "";
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart); d.setDate(weekStart.getDate() + i);
+    const cell = document.createElement("div");
+    cell.className = "day-cell";
+    if (d.toDateString() === sel.toDateString()) cell.classList.add("active");
+    if (d.toDateString() === today.toDateString()) cell.classList.add("today-marker");
+    const dow = document.createElement("div"); dow.className = "dow"; dow.textContent = DOW_SHORT[i];
+    const dn = document.createElement("div"); dn.className = "dnum"; dn.textContent = d.getDate();
+    const pm = document.createElement("div"); pm.className = "pmove"; pm.textContent = POWER_MOVES[i].word;
+    cell.appendChild(dow); cell.appendChild(dn); cell.appendChild(pm);
+    cell.addEventListener("click", () => { matrixSelectedDate = d; renderMatrix(); });
+    strip2.appendChild(cell);
+  }
+
+  // power move banner
+  const pm = POWER_MOVES[sel.getDay()];
+  document.getElementById("powerMoveWord").textContent = pm.word;
+  document.getElementById("powerMoveDesc").textContent = pm.desc;
+
+  renderScheduleColumns();
+}
+
+function renderScheduleColumns() {
+  const key = dayKey(matrixSelectedDate);
+  const sched = loadSchedule(key);
+  const plannedWrap = document.getElementById("plannedBlocks");
+  const actualWrap = document.getElementById("actualBlocks");
+
+  function renderCol(wrap, list, kind) {
+    wrap.textContent = "";
+    if (!list.length) {
+      const e = document.createElement("div");
+      e.className = "sched-block empty-actual";
+      const s = document.createElement("span"); s.className = "sb-label";
+      s.textContent = kind === "planned" ? "No intentions set yet." : "Nothing logged yet.";
+      e.appendChild(s); wrap.appendChild(e);
+      return;
+    }
+    list.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+    list.forEach((item, idx) => {
+      const b = document.createElement("div");
+      b.className = "sched-block " + (kind === "planned" ? "planned-block" : "actual-block");
+      const t = document.createElement("span"); t.className = "sb-time"; t.textContent = item.time || "—";
+      const l = document.createElement("span"); l.className = "sb-label"; l.textContent = item.label;
+      l.style.flex = "1";
+      const rm = document.createElement("button"); rm.className = "sb-remove"; rm.textContent = "×";
+      rm.setAttribute("aria-label", "Remove");
+      rm.addEventListener("click", () => {
+        list.splice(idx, 1); saveSchedule(key, sched); renderScheduleColumns();
+      });
+      b.appendChild(t); b.appendChild(l); b.appendChild(rm);
+      wrap.appendChild(b);
+    });
+  }
+  renderCol(plannedWrap, sched.planned, "planned");
+  renderCol(actualWrap, sched.actual, "actual");
+}
+
+function wireScheduleAdd(timeId, labelId, btnId, kind) {
+  const timeIn = document.getElementById(timeId);
+  const labelIn = document.getElementById(labelId);
+  const add = () => {
+    const label = labelIn.value.trim();
+    if (!label) return;
+    const key = dayKey(matrixSelectedDate);
+    const sched = loadSchedule(key);
+    sched[kind].push({ time: timeIn.value, label });
+    saveSchedule(key, sched);
+    timeIn.value = ""; labelIn.value = "";
+    renderScheduleColumns();
+  };
+  document.getElementById(btnId).addEventListener("click", add);
+  labelIn.addEventListener("keydown", (e) => { if (e.key === "Enter") add(); });
+}
+wireScheduleAdd("plannedTimeIn", "plannedLabelIn", "addPlannedBtn", "planned");
+wireScheduleAdd("actualTimeIn", "actualLabelIn", "addActualBtn", "actual");
 
 // ===================== library list =====================
 // All library rendering is done via textContent / DOM nodes, never
@@ -1956,6 +2739,7 @@ function openDetail(id) {
   const e = getEntry(id);
   if (!e) return;
   openEntryId = id;
+  openThreadReflectionId = null;
   libraryList.hidden = true;
   entryDetail.hidden = false;
   detailTitle.value = e.title || "";
@@ -1982,7 +2766,13 @@ function openDetail(id) {
   applyEngineUiState();
 }
 function closeDetail() {
+  if (threadRecording) {
+    try { threadRecStream && threadRecStream.getTracks().forEach((t) => t.stop()); } catch { /* already stopped */ }
+    clearInterval(threadRecTimerInterval);
+    threadRecording = false;
+  }
   openEntryId = null;
+  openThreadReflectionId = null;
   entryDetail.hidden = true;
   libraryList.hidden = false;
   disarmDelete();
@@ -2498,28 +3288,30 @@ loadWebllmBtn.addEventListener("click", loadWebllmModel);
 
 // Unified chat call used by both AI reflection and the myth-scan fallback below —
 // callers don't need to know or care which engine is actually active.
-async function aiChatComplete({ systemPrompt, userContent, json, onToken }) {
+async function aiChatComplete({ systemPrompt, userContent, messages, json, onToken }) {
   persistAiSettingsFromUi();
+  // Most callers pass a single systemPrompt/userContent pair; threaded
+  // reflection replies pass a full multi-turn `messages` array instead
+  // (system + entry + prior reflection + every reply since) so the model
+  // sees the whole conversation, not just the latest message.
+  const chatMessages = messages || [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userContent },
+  ];
   if (aiSettings.engine === "webllm") {
     if (!webllmEngine || webllmLoadedModelId !== webllmModel.value) {
       throw new Error("Load the in-browser model first, using the button above.");
     }
     if (json) {
       const completion = await webllmEngine.chat.completions.create({
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userContent },
-        ],
+        messages: chatMessages,
         response_format: { type: "json_object" },
       });
       return completion.choices[0].message.content || "{}";
     }
     const stream = await webllmEngine.chat.completions.create({
       stream: true,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent },
-      ],
+      messages: chatMessages,
     });
     let full = "";
     for await (const chunk of stream) {
@@ -2539,10 +3331,7 @@ async function aiChatComplete({ systemPrompt, userContent, json, onToken }) {
       model,
       stream: !json,
       ...(json ? { format: "json" } : {}),
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent },
-      ],
+      messages: chatMessages,
     }),
   });
   if (!res.ok) throw new Error(`Ollama returned HTTP ${res.status}`);
@@ -2616,6 +3405,7 @@ async function generateReflection() {
       model: aiSettings.engine === "webllm" ? webllmModel.value : currentOllamaModelName(),
       engine: aiSettings.engine,
       createdAt: Date.now(),
+      thread: [], // follow-up replies (text or transcribed voice) + AI responses to them
     });
     fresh1.updatedAt = Date.now();
     await dbPut(fresh1);
@@ -2670,12 +3460,312 @@ function renderReflections(e) {
       cur.updatedAt = Date.now();
       try { await dbPut(cur); } catch (err) { console.error("Removing reflection failed:", err); return; }
       await refreshEntries();
+      if (openThreadReflectionId === r.id) openThreadReflectionId = null;
       const fresh = getEntry(openEntryId);
       if (fresh) renderReflections(fresh);
     });
     foot.append(meta, del);
     item.append(t, foot);
+
+    // Every reflection can grow into its own thread: reply by typing or by
+    // recording a short voice note, then optionally ask the AI to respond
+    // to the thread so far. Only one thread is expanded at a time.
+    const threadCount = (r.thread || []).length;
+    const toggle = document.createElement("button");
+    toggle.className = "thread-toggle";
+    toggle.textContent = openThreadReflectionId === r.id
+      ? "▲ Hide thread"
+      : threadCount
+        ? `▼ Continue this thread (${threadCount})`
+        : "▼ Continue reflecting on this";
+    toggle.addEventListener("click", () => {
+      openThreadReflectionId = openThreadReflectionId === r.id ? null : r.id;
+      const fresh = getEntry(openEntryId);
+      if (fresh) renderReflections(fresh);
+    });
+    item.appendChild(toggle);
+    if (openThreadReflectionId === r.id) item.appendChild(buildThreadPanel(e, r));
+
     reflectionList.appendChild(item);
+  }
+}
+
+// A follow-up conversation continuing a single reflection uses the same
+// gentle, non-clinical stance as the original — it just also has the
+// entry and the reflection itself as context, plus everything said since.
+const REFLECTION_THREAD_SYSTEM_PROMPT =
+  "You are a gentle, reflective journaling companion continuing an ongoing conversation about a " +
+  "single personal journal entry. The person is replying to your previous reflection — by typing " +
+  "or by voice — to keep thinking out loud. Respond with a short reply of 2 to 5 sentences: notice " +
+  "what's new or has shifted in what they just added, reflect it back in your own words, and " +
+  "where it feels natural, offer one gentle, open-ended question. Do not give advice, diagnoses, " +
+  "or clinical language. Do not summarize point by point. Keep the tone warm, unhurried, and never " +
+  "presumptuous about how they feel.";
+
+function buildThreadMessages(entry, reflection) {
+  const messages = [
+    { role: "system", content: REFLECTION_THREAD_SYSTEM_PROMPT },
+    { role: "user", content: entry.transcript },
+    { role: "assistant", content: reflection.text },
+  ];
+  for (const m of (reflection.thread || [])) {
+    messages.push({ role: m.role, content: m.text });
+  }
+  return messages;
+}
+
+function buildThreadPanel(e, r) {
+  const wrap = document.createElement("div");
+  wrap.className = "thread-wrap";
+  const thread = r.thread || [];
+
+  if (!thread.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-msg";
+    empty.textContent = "No replies yet — add one below to keep reflecting on this.";
+    wrap.appendChild(empty);
+  } else {
+    for (const m of thread) {
+      const mi = document.createElement("div");
+      mi.className = `thread-msg role-${m.role}`;
+      const mt = document.createElement("div");
+      mt.textContent = m.text;
+      const mf = document.createElement("div");
+      mf.className = "note-foot";
+      const mm = document.createElement("span");
+      mm.className = "meta-line";
+      mm.textContent = `${m.role === "user" ? "You" : "AI"} · ${fmtDate(m.createdAt)}` +
+        (m.source === "voice" ? ` · voice${m.durationS ? ` (${m.durationS}s)` : ""}` : "") +
+        (m.role === "assistant" && m.model ? ` · ${m.model}` : "");
+      mf.appendChild(mm);
+      mi.append(mt, mf);
+      wrap.appendChild(mi);
+    }
+  }
+
+  // If the thread's last word belongs to the person, offer to get the AI's
+  // side of it — mirrors "Generate reflection" above, kept as an explicit,
+  // deliberate action rather than firing automatically after every reply.
+  if (thread.length && thread[thread.length - 1].role === "user") {
+    const genRow = document.createElement("div");
+    genRow.className = "actions-row";
+    const genBtn = document.createElement("button");
+    genBtn.className = "primary";
+    genBtn.textContent = "Get AI response";
+    const genErr = document.createElement("p");
+    genErr.className = "hint";
+    genErr.hidden = true;
+    genBtn.addEventListener("click", () => continueThreadReflection(r.id, genBtn, genErr));
+    genRow.appendChild(genBtn);
+    wrap.append(genRow, genErr);
+  }
+
+  // Composer: a text reply is always available; a voice reply reuses the
+  // same mic-capture + Whisper pipeline as the main recorder, just without
+  // the chunked hybrid-language handling a full entry needs (thread replies
+  // are short, and default to the entry's primary capture language).
+  const composer = document.createElement("div");
+  composer.className = "thread-composer";
+  const ta = document.createElement("textarea");
+  ta.placeholder = "Type a reply, or record one below…";
+  const actions = document.createElement("div");
+  actions.className = "actions-row";
+  const sendBtn = document.createElement("button");
+  sendBtn.className = "ghost";
+  sendBtn.textContent = "Send reply";
+  const recBtn = document.createElement("button");
+  recBtn.className = "record";
+  recBtn.textContent = "● Record voice reply";
+  const recStatus = document.createElement("span");
+  recStatus.className = "meta-line";
+  recStatus.style.marginLeft = "10px";
+
+  sendBtn.addEventListener("click", async () => {
+    const text = ta.value.trim();
+    if (!text) return;
+    const source = ta.dataset.voiceSource === "voice" ? "voice" : "text";
+    const durationS = ta.dataset.voiceDurationS ? Number(ta.dataset.voiceDurationS) : null;
+    sendBtn.disabled = true;
+    await addThreadReply(r.id, text, source, durationS);
+  });
+  recBtn.addEventListener("click", () => toggleThreadRecording(recBtn, recStatus, ta));
+
+  actions.append(sendBtn, recBtn, recStatus);
+  composer.append(ta, actions);
+  wrap.appendChild(composer);
+  return wrap;
+}
+
+async function addThreadReply(reflectionId, text, source, durationS) {
+  const e = getEntry(openEntryId);
+  if (!e) return;
+  const r = (e.reflections || []).find((x) => x.id === reflectionId);
+  if (!r) return;
+  r.thread = r.thread || [];
+  r.thread.push({
+    id: uid(),
+    role: "user",
+    text,
+    source: source || "text",
+    durationS: durationS || null,
+    createdAt: Date.now(),
+  });
+  e.updatedAt = Date.now();
+  try { await dbPut(e); } catch (err) { console.error("Adding thread reply failed:", err); return; }
+  await refreshEntries();
+  const fresh = getEntry(openEntryId);
+  if (fresh) { renderReflections(fresh); updateDetailChrome(fresh); }
+}
+
+async function continueThreadReflection(reflectionId, btn, errEl) {
+  const e = getEntry(openEntryId);
+  if (!e) return;
+  const r = (e.reflections || []).find((x) => x.id === reflectionId);
+  if (!r) return;
+  btn.disabled = true;
+  btn.textContent = "Generating…";
+  if (errEl) errEl.hidden = true;
+  try {
+    const messages = buildThreadMessages(e, r);
+    const full = await aiChatComplete({ messages });
+    if (!full.trim()) throw new Error("The model returned an empty response.");
+
+    const fresh1 = getEntry(openEntryId);
+    if (!fresh1) return; // user navigated away mid-generation
+    const r1 = (fresh1.reflections || []).find((x) => x.id === reflectionId);
+    if (!r1) return;
+    r1.thread = r1.thread || [];
+    r1.thread.push({
+      id: uid(),
+      role: "assistant",
+      text: full.trim(),
+      model: aiSettings.engine === "webllm" ? webllmModel.value : currentOllamaModelName(),
+      engine: aiSettings.engine,
+      createdAt: Date.now(),
+    });
+    fresh1.updatedAt = Date.now();
+    await dbPut(fresh1);
+    await refreshEntries();
+    const fresh2 = getEntry(openEntryId);
+    if (fresh2) { renderReflections(fresh2); updateDetailChrome(fresh2); }
+  } catch (err) {
+    console.error("Thread reply generation failed:", err);
+    if (errEl) {
+      errEl.hidden = false;
+      errEl.textContent = "Couldn't generate a reply (" + err.message + ").";
+    }
+    btn.disabled = false;
+    btn.textContent = "Get AI response";
+  }
+}
+
+// Lean, single-language transcription for quick voice replies inside a
+// thread. Unlike the main capture pipeline's transcribeFloat32, this skips
+// hybrid-language detection and the fuller repetition-mitigation bookkeeping
+// — thread replies are short follow-ups, not full entries, and default to
+// whichever primary language is set on the Capture tab. Reuses the same
+// chunking (chunkAudio) and simple word-overlap dedup idea as the main
+// pipeline so a reply longer than ~15s still comes out clean.
+async function transcribeThreadReply(rawFloat32, languageCode) {
+  if (!transcriber) throw new Error("Load the transcription model on the Capture tab first.");
+  const sampleRate = 16000;
+  const chunks = chunkAudio(rawFloat32, sampleRate, 15, 3);
+  const genKwargsBase = { no_repeat_ngram_size: 3, repetition_penalty: 1.3, max_new_tokens: 200 };
+  let text = "";
+  for (const chunk of chunks) {
+    const result = await transcriber(chunk, {
+      return_timestamps: true,
+      language: languageCode,
+      task: "transcribe",
+      generate_kwargs: { ...genKwargsBase, language: languageCode, task: "transcribe" },
+    });
+    const chunkText = (result.text || "").trim();
+    const existingWords = text.trim() ? text.trim().split(/\s+/) : [];
+    const newWords = chunkText ? chunkText.split(/\s+/) : [];
+    let skip = 0;
+    const maxSearch = Math.min(12, existingWords.length, newWords.length);
+    for (let len = maxSearch; len >= 2; len--) {
+      if (existingWords.slice(-len).join(" ").toLowerCase() === newWords.slice(0, len).join(" ").toLowerCase()) {
+        skip = len;
+        break;
+      }
+    }
+    text = existingWords.concat(newWords.slice(skip)).join(" ");
+  }
+  return text.trim();
+}
+
+async function toggleThreadRecording(btn, statusEl, textareaEl) {
+  if (!threadRecording) {
+    if (!transcriber) {
+      statusEl.textContent = "Load the transcription model on the Capture tab first.";
+      return;
+    }
+    try {
+      threadRecStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const ctx = await ensureAudioCtx();
+      threadRecPcmChunks = [];
+      threadRecSourceNode = ctx.createMediaStreamSource(threadRecStream);
+      threadRecProcessorNode = ctx.createScriptProcessor(4096, 1, 1);
+      threadRecSilentGain = ctx.createGain();
+      threadRecSilentGain.gain.value = 0; // never let mic audio reach the speakers
+      threadRecProcessorNode.onaudioprocess = (ev) => {
+        threadRecPcmChunks.push(new Float32Array(ev.inputBuffer.getChannelData(0)));
+      };
+      threadRecSourceNode.connect(threadRecProcessorNode);
+      threadRecProcessorNode.connect(threadRecSilentGain);
+      threadRecSilentGain.connect(ctx.destination);
+
+      threadRecording = true;
+      btn.textContent = "■ Stop";
+      btn.classList.add("active");
+      threadRecStart = Date.now();
+      threadRecTimerInterval = setInterval(() => {
+        statusEl.textContent = formatTimer(Date.now() - threadRecStart);
+      }, 500);
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = "Microphone access denied or unavailable.";
+    }
+  } else {
+    threadRecording = false;
+    btn.textContent = "● Record voice reply";
+    btn.classList.remove("active");
+    clearInterval(threadRecTimerInterval);
+    threadRecSourceNode.disconnect();
+    threadRecProcessorNode.disconnect();
+    threadRecSilentGain.disconnect();
+    threadRecStream.getTracks().forEach((t) => t.stop());
+
+    const nativeSampleRate = audioCtx.sampleRate;
+    const totalLength = threadRecPcmChunks.reduce((sum, c) => sum + c.length, 0);
+    const rawPcm = new Float32Array(totalLength);
+    let offset = 0;
+    for (const c of threadRecPcmChunks) { rawPcm.set(c, offset); offset += c.length; }
+    threadRecPcmChunks = [];
+    const recordedSeconds = totalLength / nativeSampleRate;
+
+    btn.disabled = true;
+    statusEl.textContent = `Transcribing ${Math.round(recordedSeconds)}s…`;
+    try {
+      const audioBuffer = audioCtx.createBuffer(1, rawPcm.length, nativeSampleRate);
+      audioBuffer.copyToChannel(rawPcm, 0);
+      const float32 = await renderBufferTo16k(audioBuffer);
+      const text = await transcribeThreadReply(float32, langSelect.value);
+      if (text) {
+        textareaEl.value = (textareaEl.value.trim() ? textareaEl.value.trim() + " " : "") + text;
+      }
+      textareaEl.dataset.voiceSource = "voice";
+      textareaEl.dataset.voiceDurationS = String(Math.round(recordedSeconds));
+      statusEl.textContent = text
+        ? `Transcribed ${Math.round(recordedSeconds)}s — review, then send.`
+        : `Recorded ${Math.round(recordedSeconds)}s, but nothing was transcribed.`;
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = "Couldn't transcribe that recording: " + err.message;
+    } finally {
+      btn.disabled = false;
+    }
   }
 }
 

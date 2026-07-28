@@ -1,93 +1,62 @@
-# LOOB — Local Entries Prototype
+# LOOB
 
-A single-file, local-first browser prototype for LOOB. Runs Whisper small
-entirely client-side via [transformers.js](https://huggingface.co/docs/transformers.js) —
-no server, no upload, no network involvement beyond the one-time model
-download. Everything below (transcripts, edits, notes, tags) is stored in
-this browser's own IndexedDB, on this device, and nowhere else.
+A browser-based, **local-first** ambient journaling portal. Everything runs on the
+user's own device — voice is transcribed in the browser tab via Whisper (transformers.js),
+and every entry is stored in this browser's IndexedDB. **No server, no upload.** The
+privacy claim is structural and verifiable: open DevTools → Network while recording and
+you'll see no audio leave the device.
 
-## Running it
+Live: https://prithya-r.github.io/LOOB_transcription-API_prototype/
 
-No build step. Serve the folder over HTTP (opening `index.html` directly as
-a `file://` URL breaks ES module imports and microphone access):
+## What's in this build
+
+The prototype is a single self-contained `index.html`. It now has three layers:
+
+**1. Portal (entry gate).** Landing visitors give their exact date, time, and location
+of birth before entering — the framework's "total authenticity from the start" rule.
+Two placeholder art variants are toggleable (raw portal symbol vs. gatekeeper + Xolo);
+real artwork drops into the `#portalArtSymbol` / `#portalArtGatekeeper` blocks. Birth
+data is stored on-device only (localStorage) and skips the gate on return visits.
+
+**2. Today (weekly/daily matrix).** A Sunday-start week strip; the seven fixed power
+moves (Acknowledgment, Belief, Choice, Discipline, Expansion, Feel, Going for it) in
+order Sun→Sat; lunar phase, sun sign, and numerology shown as a coordinate strip; and a
+planned-vs-actual split schedule that exposes the friction between intention and action.
+
+- **Numerology** = the Sunday-start **week number of the year, reduced to a single
+  digit**. Week 1 is the week containing 1 January; the count resets at the year
+  boundary. Example: 26 July 2026 → week 31 → 3 + 1 = **4** (foundation, discipline,
+  constancy). Because it's week-based, the number changes weekly, not daily.
+- **Lunar phase / sun sign** are lightweight on-device approximations — good as an
+  interface cue, not ephemeris-grade.
+
+**3. Diary (story bank).** The existing capture + library engine: record a voice note,
+transcribe it on-device, then save it as an entry you can edit, tag, annotate with
+notes, categorise by Life Era, and browse. Includes rule-based tag suggestions,
+Myth vs Truth limiting-belief detection, and optional AI reflection (in-browser WebLLM,
+or a locally-run Ollama model as fallback).
+
+## Transcription notes
+
+- Whisper small runs client-side; model weights (~250 MB) are fetched once from the
+  Hugging Face CDN, then cached by the browser for offline reuse.
+- Language handling is explicit: name the primary language, and optionally a second for
+  code-switching. Recordings over 15s are chunked (15s windows, 3s overlap) so the
+  30-second context limit never truncates a long recording.
+- Raw audio is never stored with an entry — the one-time WAV download offered right
+  after recording is the only window to keep the audio itself.
+
+## Running locally
+
+It's a static file. Serve it over HTTP (not `file://`, which blocks some browser APIs):
 
 ```bash
 python3 -m http.server 8080
+# then open http://localhost:8080
 ```
 
-Then open `http://localhost:8080` in Chrome or Edge (WebGPU support gives a
-real speed boost; it falls back to WASM otherwise). If this is already
-hosted via GitHub Pages, just open that URL.
+## Deploying
 
-## What's in it
-
-**Capture**
-- Record from the mic (unbounded length — chunked into 15s windows under
-  the hood) or upload an audio file
-- Or write an entry directly as text, no transcription step
-- Primary + optional secondary language, for code-switching recordings
-  (each ~15s window is tried against both explicitly and the better match
-  is kept — see the in-app footnote for the full reasoning and known
-  limits of this approach)
-- Per-entry Where / When / Life Era / Private-vs-shareable fields, set at
-  save time
-- A "Download recording (.wav)" button appears right after a mic
-  recording — that's the only window to keep the audio, since **saved
-  entries never store audio**
-
-**Library**
-- Every saved entry: title, transcript, metadata, tags, life era, notes
-- Search across titles, transcripts, notes, tags, life era, and location
-- Open any entry to edit the title/transcript (the original
-  as-transcribed text is always kept alongside your edits, with a
-  one-click "Restore original transcript")
-- Add/remove notes on an entry, timestamped
-- Rule-based tag suggestions (keyword matching across categories like
-  work, family, health, relationships, travel, gratitude, loss & grief,
-  achievement, conflict, milestone) — click a suggested tag to apply it,
-  or add your own custom tags
-- Two-press delete (no undo, matching the no-server storage model)
-
-## Known limitations
-
-- **Not exercised in a live browser session by me** — verified by static
-  analysis (HTML structure, JS syntax, unit tests on the tag-rule engine
-  and date formatting), but please test a full record → save → edit →
-  tag → delete pass yourself before wider sharing.
-- Transcription auto-translation avoidance, chunk-boundary dedup, and
-  silence-padding fixes are all as before — see in-app footnote for full
-  detail on Whisper's known failure modes and how this pipeline works
-  around them.
-- The rule-based tag engine is intentionally simple keyword matching, not
-  inference — it will under-tag and occasionally mis-tag. That's expected
-  at this stage, not a bug to chase; richer auto-tagging is scoped as a
-  later, MCP-connected upgrade in the Feature Set 3 brief.
-- The Private/Shareable toggle is a schema field and a UI signal right
-  now, not an enforced permission — nothing in this prototype sends data
-  anywhere regardless of its value. It exists so a future MCP server can
-  read it as a real gate once Layer 2 exists.
-- Entries live in this browser's IndexedDB for this origin: they don't
-  sync across devices or browsers, and clearing this site's data (or
-  using a private/incognito window) deletes them.
-- `crypto.randomUUID` (used for entry/tag/note IDs) needs HTTPS or
-  localhost — both GitHub Pages and `python3 -m http.server` qualify.
-  There's a fallback ID generator regardless.
-
-## Recent changes (this update)
-
-- Added saved entries backed by IndexedDB (fully on-device), a Library
-  view with search, per-entry transcript editing with restore-to-original,
-  and timestamped notes.
-- Added a one-time raw-audio WAV download offered immediately after each
-  recording — audio is never stored with entries.
-- Added text entry as a third input path alongside record/upload.
-- Added Where / When / Life Era fields per entry, editable after saving.
-- Added a per-entry Private/Shareable flag, private by default.
-- Added rule-based tag suggestions plus custom tags, with search now
-  covering tags, life era, and location too.
-
-## Files
-
-```
-index.html   Everything — UI, styling, and the full app logic in one file
-```
+GitHub Pages serves `index.html` from the repo root. `.nojekyll` is included so Pages
+doesn't run the file through Jekyll. After pushing, hard-refresh (Ctrl/Cmd+Shift+R) to
+bypass the cached previous build.
