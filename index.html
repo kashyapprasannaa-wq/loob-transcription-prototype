@@ -856,8 +856,6 @@
   .cal-day.is-today .cal-daynum{ color:var(--ember); font-weight:600; }
   .cal-day-top{ display:flex; align-items:baseline; justify-content:space-between; }
   .cal-daynum{ font-family:var(--font-display); font-size:16px; color:var(--parchment); line-height:1; }
-  .cal-day-pm{ font-family:var(--font-mono); font-size:7px; letter-spacing:0.02em;
-    text-transform:uppercase; color:var(--parchment-dim); opacity:0.7; }
   .cal-events{ display:flex; flex-direction:column; gap:2px; margin-top:2px; }
   .cal-event-pill{
     font-family:var(--font-body); font-size:10px; line-height:1.25; color:var(--parchment);
@@ -3187,6 +3185,9 @@ function countEvents(d) {
 function eid() {
   return "ev-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
 }
+function schedId() {
+  return "sc-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
+}
 
 // ===================== CROSSLINK: diary entries ⇄ calendar days =====================
 // Entries carry a `when` timestamp (epoch ms). This maps any date to the diary
@@ -3596,11 +3597,7 @@ function renderCalendar() {
     const num = document.createElement("span");
     num.className = "cal-daynum";
     num.textContent = d.getDate();
-    const pmTag = document.createElement("span");
-    pmTag.className = "cal-day-pm";
-    pmTag.textContent = POWER_MOVES[d.getDay()].word;
     top.appendChild(num);
-    top.appendChild(pmTag);
     cell.appendChild(top);
 
     // diary-entry marker: a small ember quill dot when entries were recorded here
@@ -3718,6 +3715,15 @@ function renderDayEvents() {
     delBtn.addEventListener("click", () => {
       const remaining = loadEvents(key).filter((x) => x.id !== ev.id);
       saveEvents(key, remaining);
+      // If this event came from a planned/actual entry, drop that too so it
+      // doesn't linger in the schedule widget claiming to still be logged.
+      if (ev.schedRef) {
+        const sched = loadSchedule(key);
+        sched.planned = sched.planned.filter((s) => s.id !== ev.schedRef);
+        sched.actual = sched.actual.filter((s) => s.id !== ev.schedRef);
+        saveSchedule(key, sched);
+        renderScheduleColumns();
+      }
       renderDayEvents();
       renderCalendar();
       renderWeekGrid();
@@ -3894,7 +3900,13 @@ function renderScheduleColumns() {
       const rm = document.createElement("button"); rm.className = "sb-remove"; rm.textContent = "×";
       rm.setAttribute("aria-label", "Remove");
       rm.addEventListener("click", () => {
-        list.splice(idx, 1); saveSchedule(key, sched); renderScheduleColumns();
+        list.splice(idx, 1); saveSchedule(key, sched);
+        // Also drop the calendar event this intention/action registered, if any.
+        if (item.id) {
+          saveEvents(key, loadEvents(key).filter((ev) => ev.schedRef !== item.id));
+          renderCalendar(); renderWeekGrid(); renderDayEvents();
+        }
+        renderScheduleColumns();
       });
       b.appendChild(t); b.appendChild(l); b.appendChild(rm);
       wrap.appendChild(b);
@@ -3904,6 +3916,11 @@ function renderScheduleColumns() {
   renderCol(actualWrap, sched.actual, "actual");
 }
 
+// Planned/actual entries register on the calendar as real events (so they
+// show up in the month grid, week grid, and day panel, not just here) —
+// tagged with `kind`/`schedRef` so they stay linked back to their schedule
+// row. Planned intentions reuse the "general" category (teal), actual ones
+// "ritual" (ember) — the same colors this panel already uses for ◇/●.
 function wireScheduleAdd(timeId, labelId, btnId, kind) {
   const timeIn = document.getElementById(timeId);
   const labelIn = document.getElementById(labelId);
@@ -3912,10 +3929,29 @@ function wireScheduleAdd(timeId, labelId, btnId, kind) {
     if (!label) return;
     const key = dayKey(matrixSelectedDate);
     const sched = loadSchedule(key);
-    sched[kind].push({ time: timeIn.value, label });
+    const schedItem = { id: schedId(), time: timeIn.value, label };
+    sched[kind].push(schedItem);
     saveSchedule(key, sched);
+
+    const events = loadEvents(key);
+    events.push({
+      id: eid(),
+      title: (kind === "planned" ? "◇ " : "● ") + label,
+      start: schedItem.time || "",
+      end: "",
+      category: kind === "planned" ? "general" : "ritual",
+      note: "",
+      allDay: !schedItem.time,
+      kind,
+      schedRef: schedItem.id,
+    });
+    saveEvents(key, events);
+
     timeIn.value = ""; labelIn.value = "";
     renderScheduleColumns();
+    renderCalendar();
+    renderWeekGrid();
+    renderDayEvents();
   };
   document.getElementById(btnId).addEventListener("click", add);
   labelIn.addEventListener("keydown", (e) => { if (e.key === "Enter") add(); });
