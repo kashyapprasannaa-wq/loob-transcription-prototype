@@ -943,39 +943,17 @@
   }
   .entry-calendar-link:hover{ border-color:var(--ember); color:var(--ember); }
 
-  /* split schedule: planned vs actual — compact, lives in the right column */
-  .split-sched-panel{ margin-top:0; }
-  .split-sched{ display:grid; grid-template-columns:1fr 1fr; gap:10px; min-width:0; }
-  .split-sched > div{ min-width:0; }
-  @media (max-width:560px){ .split-sched{ grid-template-columns:1fr; } .week-strip{ grid-template-columns:repeat(4,1fr); } }
-  .sched-col-title{ font-family:var(--font-mono); font-size:9.5px; letter-spacing:0.09em;
-    text-transform:uppercase; margin:0 0 8px; display:flex; align-items:center; gap:6px; }
-  .sched-col-title.planned{ color:var(--teal); }
-  .sched-col-title.actual{ color:var(--ember); }
-  .sched-block{
-    border:1px solid var(--line); border-radius:4px; padding:6px 8px; margin-bottom:6px;
-    display:flex; justify-content:space-between; align-items:center; gap:6px; min-width:0;
+  /* event status: planned (default) vs actual — a property on the event
+     itself now, not a separate tracked list. Same teal/ember convention. */
+  .status-toggle{ display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; }
+  .status-opt{
+    background:transparent; border:none; border-radius:0; padding:8px 14px;
+    font-family:var(--font-body); font-size:12.5px; color:var(--parchment-dim); cursor:pointer;
   }
-  .sched-block .sb-time{ font-family:var(--font-mono); font-size:10px; color:var(--parchment-dim);
-    flex-shrink:0; }
-  .sched-block .sb-label{
-    font-size:12px; color:var(--parchment); min-width:0; flex:1;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-  }
-  .sched-block.planned-block{ border-left:2px solid var(--teal); }
-  .sched-block.actual-block{ border-left:2px solid var(--ember); }
-  .sched-block.empty-actual{ opacity:0.5; font-style:italic; }
-  .sched-block .sb-remove{ background:none; border:none; color:var(--parchment-dim); cursor:pointer;
-    font-size:14px; padding:0 2px; flex-shrink:0; }
-  .sched-block .sb-remove:hover{ color:var(--ember); }
-  .sched-add-row{ display:flex; gap:4px; margin-top:6px; }
-  .sched-add-row input{ background:rgba(var(--parchment-rgb),0.06); border:1px solid var(--line); color:var(--parchment);
-    padding:6px 7px; border-radius:8px; font-size:11.5px; font-family:var(--font-body); min-width:0; }
-  .sched-add-row input.sb-time-in{ width:64px; flex-shrink:0; font-family:var(--font-mono); }
-  .sched-add-row input.sb-label-in{ flex:1; min-width:0; }
-  .sched-add-row button{ padding:6px 9px; font-size:11px; flex-shrink:0; }
-  .friction-note{ font-size:11px; color:var(--parchment-dim); line-height:1.5; font-style:italic;
-    border-top:1px solid var(--line); padding-top:10px; margin-top:12px; }
+  .status-opt + .status-opt{ border-left:1px solid var(--line); }
+  .status-opt:hover{ background:rgba(var(--parchment-rgb),0.05); }
+  .status-opt.active[data-status="planned"]{ background:var(--teal-soft); color:var(--parchment); }
+  .status-opt.active[data-status="actual"]{ background:rgba(var(--ember-rgb),0.22); color:var(--ember); }
 </style>
 </head>
 <body>
@@ -1306,6 +1284,13 @@
                 </label>
               </div>
               <div class="ee-field full">
+                <label>Status</label>
+                <div class="status-toggle" id="evStatusToggle">
+                  <button type="button" class="status-opt active" data-status="planned">◇ Planned</button>
+                  <button type="button" class="status-opt" data-status="actual">● Actual</button>
+                </div>
+              </div>
+              <div class="ee-field full">
                 <label for="evNoteIn">Note (optional)</label>
                 <textarea id="evNoteIn" placeholder="Anything worth remembering about this…"></textarea>
               </div>
@@ -1315,31 +1300,6 @@
               <button class="ghost" id="evCancelBtn">Cancel</button>
             </div>
           </div>
-        </div>
-
-        <div class="panel split-sched-panel" style="padding:16px;">
-          <p class="panel-title">Planned vs. actual</p>
-          <div class="split-sched">
-            <div>
-              <p class="sched-col-title planned"><span>◇</span> Planned</p>
-              <div id="plannedBlocks"></div>
-              <div class="sched-add-row">
-                <input type="time" class="sb-time-in" id="plannedTimeIn">
-                <input type="text" class="sb-label-in" id="plannedLabelIn" placeholder="Sleep, routine…">
-                <button class="ghost" id="addPlannedBtn">Add</button>
-              </div>
-            </div>
-            <div>
-              <p class="sched-col-title actual"><span>●</span> Actual</p>
-              <div id="actualBlocks"></div>
-              <div class="sched-add-row">
-                <input type="time" class="sb-time-in" id="actualTimeIn">
-                <input type="text" class="sb-label-in" id="actualLabelIn" placeholder="What happened…">
-                <button class="ghost" id="addActualBtn">Add</button>
-              </div>
-            </div>
-          </div>
-          <p class="friction-note">The gap between the day you planned and the day you lived.</p>
         </div>
       </div>
     </div>
@@ -1506,9 +1466,8 @@
           </div>
           <p class="hint">
             Downloads every saved entry — transcripts, timestamps, life era, tags, notes, and AI
-            reflections/threads — plus all past calendars (events and planned/actual schedules for
-            every day) as one JSON file to this device. Nothing is uploaded; it's a local backup you
-            keep yourself.
+            reflections/threads — plus all past calendars (every event, for every day) as one JSON
+            file to this device. Nothing is uploaded; it's a local backup you keep yourself.
           </p>
         </div>
       </div>
@@ -2740,9 +2699,9 @@ downloadEntryBtn.addEventListener("click", () => {
 });
 
 exportAllEntriesBtn.addEventListener("click", () => {
-  // Gather every stored day's calendar data — events and the planned/actual
-  // schedule — so past calendars are backed up alongside diary entries. All of
-  // it lives in localStorage keyed by ISO date; we sweep those keys here.
+  // Gather every stored day's calendar events so past calendars are backed
+  // up alongside diary entries. All of it lives in localStorage keyed by
+  // ISO date; we sweep those keys here.
   const calendars = {};
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -2752,12 +2711,6 @@ exportAllEntriesBtn.addEventListener("click", () => {
         const iso = k.slice("loob-events-".length);
         const evs = loadEvents(iso);
         if (evs.length) (calendars[iso] = calendars[iso] || {}).events = evs;
-      } else if (k.indexOf("loob-sched-") === 0) {
-        const iso = k.slice("loob-sched-".length);
-        const sc = loadSchedule(iso);
-        if ((sc.planned && sc.planned.length) || (sc.actual && sc.actual.length)) {
-          (calendars[iso] = calendars[iso] || {}).schedule = sc;
-        }
       }
     }
   } catch (e) { /* storage unavailable */ }
@@ -3143,35 +3096,26 @@ function sunSign(d) {
 // ===================== POWER MOVES (fixed framework, Sun→Sat) =====================
 // These are part of the client's framework and do not change.
 const POWER_MOVES = [
-  { word: "Acknowledgment", desc: "See it plainly. Name what is actually here before anything else moves." },
-  { word: "Belief", desc: "Decide what you hold to be true — the ground the rest of the week stands on." },
-  { word: "Choice", desc: "Out of everything possible, choose. The commitment is the work." },
+  { word: "Acknowledge", desc: "See it plainly. Name what is actually here before anything else moves." },
+  { word: "Believe", desc: "Decide what you hold to be true — the ground the rest of the week stands on." },
+  { word: "Choose", desc: "Out of everything possible, choose. The commitment is the work." },
   { word: "Discipline", desc: "Return to it whether or not you feel like it. Constancy over mood." },
-  { word: "Expansion", desc: "Widen the frame. Let the practice reach past its usual edge." },
+  { word: "Expand", desc: "Widen the frame. Let the practice reach past its usual edge." },
   { word: "Feel", desc: "Drop out of the head and into the body. Let the day be felt, not just run." },
-  { word: "Going for it", desc: "No more rehearsal. Move at full commitment toward the thing." },
+  { word: "Go For It", desc: "No more rehearsal. Move at full commitment toward the thing." },
 ];
 const DOW_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DOW_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-// ===================== SCHEDULE (planned vs actual) storage =====================
-// Per-day, on-device. Keyed by ISO date so each day keeps its own split.
 function dayKey(d) {
   return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
 }
-function loadSchedule(key) {
-  try { return JSON.parse(localStorage.getItem("loob-sched-" + key) || "null") || { planned: [], actual: [] }; }
-  catch { return { planned: [], actual: [] }; }
-}
-function saveSchedule(key, sched) {
-  try { localStorage.setItem("loob-sched-" + key, JSON.stringify(sched)); } catch (e) {}
-}
 
 // ===================== EVENTS (calendar) storage =====================
-// Richer than the planned/actual schedule: title, start/end time, category,
-// note, all-day flag. Stored per-day on-device, keyed by ISO date, so the
-// calendar stays local-first like everything else.
+// Title, start/end time, category, status (planned/actual), note, all-day
+// flag. Stored per-day on-device, keyed by ISO date, so the calendar stays
+// local-first like everything else.
 function loadEvents(key) {
   try { return JSON.parse(localStorage.getItem("loob-events-" + key) || "null") || []; }
   catch { return []; }
@@ -3185,8 +3129,11 @@ function countEvents(d) {
 function eid() {
   return "ev-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
 }
-function schedId() {
-  return "sc-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
+// Planned (the default) vs actual — a glyph prefix on the event's own title,
+// same ◇/● convention as the old planned/actual widget, but now a property
+// of the event itself rather than a separate tracked entry.
+function statusGlyph(ev) {
+  return (ev.status === "actual") ? "● " : "◇ ";
 }
 
 // ===================== CROSSLINK: diary entries ⇄ calendar days =====================
@@ -3312,7 +3259,6 @@ function renderMatrix() {
   renderCalendar();
   renderWeekGrid();
   renderDayEvents();
-  renderScheduleColumns();
 }
 
 // ===================== WEEKLY TIME-GRID rendering =====================
@@ -3475,7 +3421,7 @@ function renderWeekGrid() {
       tEl.textContent = fmtTime12(item.ev.start) + (item.ev.end ? "–" + fmtTime12(item.ev.end) : "");
       const nEl = document.createElement("div");
       nEl.className = "wg-ev-title";
-      nEl.textContent = item.ev.title;
+      nEl.textContent = statusGlyph(item.ev) + item.ev.title;
       // Only show time line if the block is tall enough to fit both lines.
       if (hPx >= 30) block.appendChild(tEl);
       block.appendChild(nEl);
@@ -3618,7 +3564,7 @@ function renderCalendar() {
       events.slice(0, 3).forEach((ev) => {
         const pill = document.createElement("div");
         pill.className = "cal-event-pill cat-" + (ev.category || "general");
-        pill.textContent = (ev.allDay ? "" : (ev.start ? fmtTime12(ev.start).replace(":00", "") + " " : "")) + ev.title;
+        pill.textContent = (ev.allDay ? "" : (ev.start ? fmtTime12(ev.start).replace(":00", "") + " " : "")) + statusGlyph(ev) + ev.title;
         wrap.appendChild(pill);
       });
       if (events.length > 3) {
@@ -3686,7 +3632,7 @@ function renderDayEvents() {
     const titleLine = document.createElement("div");
     const title = document.createElement("span");
     title.className = "ev-title";
-    title.textContent = ev.title;
+    title.textContent = statusGlyph(ev) + ev.title;
     titleLine.appendChild(title);
     if (ev.category && ev.category !== "general") {
       const cat = document.createElement("span");
@@ -3715,15 +3661,6 @@ function renderDayEvents() {
     delBtn.addEventListener("click", () => {
       const remaining = loadEvents(key).filter((x) => x.id !== ev.id);
       saveEvents(key, remaining);
-      // If this event came from a planned/actual entry, drop that too so it
-      // doesn't linger in the schedule widget claiming to still be logged.
-      if (ev.schedRef) {
-        const sched = loadSchedule(key);
-        sched.planned = sched.planned.filter((s) => s.id !== ev.schedRef);
-        sched.actual = sched.actual.filter((s) => s.id !== ev.schedRef);
-        saveSchedule(key, sched);
-        renderScheduleColumns();
-      }
       renderDayEvents();
       renderCalendar();
       renderWeekGrid();
@@ -3789,6 +3726,20 @@ const evEndIn = document.getElementById("evEndIn");
 const evCatIn = document.getElementById("evCatIn");
 const evNoteIn = document.getElementById("evNoteIn");
 const evAllDayIn = document.getElementById("evAllDayIn");
+const evStatusToggle = document.getElementById("evStatusToggle");
+
+function setEventStatus(status) {
+  for (const opt of evStatusToggle.querySelectorAll(".status-opt")) {
+    opt.classList.toggle("active", opt.dataset.status === status);
+  }
+}
+function getEventStatus() {
+  const active = evStatusToggle.querySelector(".status-opt.active");
+  return active ? active.dataset.status : "planned";
+}
+evStatusToggle.querySelectorAll(".status-opt").forEach((opt) => {
+  opt.addEventListener("click", () => setEventStatus(opt.dataset.status));
+});
 
 function openEventEditor(idOrNull) {
   editingEventId = idOrNull || null;
@@ -3802,10 +3753,12 @@ function openEventEditor(idOrNull) {
       evCatIn.value = ev.category || "general";
       evNoteIn.value = ev.note || "";
       evAllDayIn.checked = !!ev.allDay;
+      setEventStatus(ev.status || "planned");
     }
   } else {
     evTitleIn.value = ""; evStartIn.value = ""; evEndIn.value = "";
     evCatIn.value = "general"; evNoteIn.value = ""; evAllDayIn.checked = false;
+    setEventStatus("planned");
   }
   toggleAllDayFields();
   eventEditor.hidden = false;
@@ -3839,6 +3792,7 @@ document.getElementById("evSaveBtn").addEventListener("click", () => {
     category: evCatIn.value,
     note: evNoteIn.value.trim(),
     allDay: evAllDayIn.checked,
+    status: getEventStatus(),
   };
   if (editingEventId) {
     const idx = events.findIndex((x) => x.id === editingEventId);
@@ -3872,92 +3826,6 @@ document.getElementById("calTodayBtn").addEventListener("click", () => {
   hideEventEditor();
   renderMatrix();
 });
-
-function renderScheduleColumns() {
-  const key = dayKey(matrixSelectedDate);
-  const sched = loadSchedule(key);
-  const plannedWrap = document.getElementById("plannedBlocks");
-  const actualWrap = document.getElementById("actualBlocks");
-
-  function renderCol(wrap, list, kind) {
-    wrap.textContent = "";
-    if (!list.length) {
-      const e = document.createElement("div");
-      e.className = "sched-block empty-actual";
-      const s = document.createElement("span"); s.className = "sb-label";
-      s.textContent = kind === "planned" ? "No intentions set yet." : "Nothing logged yet.";
-      e.appendChild(s); wrap.appendChild(e);
-      return;
-    }
-    list.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
-    list.forEach((item, idx) => {
-      const b = document.createElement("div");
-      b.className = "sched-block " + (kind === "planned" ? "planned-block" : "actual-block");
-      const t = document.createElement("span"); t.className = "sb-time"; t.textContent = item.time || "—";
-      const l = document.createElement("span"); l.className = "sb-label"; l.textContent = item.label;
-      l.title = item.label;
-      l.style.flex = "1";
-      const rm = document.createElement("button"); rm.className = "sb-remove"; rm.textContent = "×";
-      rm.setAttribute("aria-label", "Remove");
-      rm.addEventListener("click", () => {
-        list.splice(idx, 1); saveSchedule(key, sched);
-        // Also drop the calendar event this intention/action registered, if any.
-        if (item.id) {
-          saveEvents(key, loadEvents(key).filter((ev) => ev.schedRef !== item.id));
-          renderCalendar(); renderWeekGrid(); renderDayEvents();
-        }
-        renderScheduleColumns();
-      });
-      b.appendChild(t); b.appendChild(l); b.appendChild(rm);
-      wrap.appendChild(b);
-    });
-  }
-  renderCol(plannedWrap, sched.planned, "planned");
-  renderCol(actualWrap, sched.actual, "actual");
-}
-
-// Planned/actual entries register on the calendar as real events (so they
-// show up in the month grid, week grid, and day panel, not just here) —
-// tagged with `kind`/`schedRef` so they stay linked back to their schedule
-// row. Planned intentions reuse the "general" category (teal), actual ones
-// "ritual" (ember) — the same colors this panel already uses for ◇/●.
-function wireScheduleAdd(timeId, labelId, btnId, kind) {
-  const timeIn = document.getElementById(timeId);
-  const labelIn = document.getElementById(labelId);
-  const add = () => {
-    const label = labelIn.value.trim();
-    if (!label) return;
-    const key = dayKey(matrixSelectedDate);
-    const sched = loadSchedule(key);
-    const schedItem = { id: schedId(), time: timeIn.value, label };
-    sched[kind].push(schedItem);
-    saveSchedule(key, sched);
-
-    const events = loadEvents(key);
-    events.push({
-      id: eid(),
-      title: (kind === "planned" ? "◇ " : "● ") + label,
-      start: schedItem.time || "",
-      end: "",
-      category: kind === "planned" ? "general" : "ritual",
-      note: "",
-      allDay: !schedItem.time,
-      kind,
-      schedRef: schedItem.id,
-    });
-    saveEvents(key, events);
-
-    timeIn.value = ""; labelIn.value = "";
-    renderScheduleColumns();
-    renderCalendar();
-    renderWeekGrid();
-    renderDayEvents();
-  };
-  document.getElementById(btnId).addEventListener("click", add);
-  labelIn.addEventListener("keydown", (e) => { if (e.key === "Enter") add(); });
-}
-wireScheduleAdd("plannedTimeIn", "plannedLabelIn", "addPlannedBtn", "planned");
-wireScheduleAdd("actualTimeIn", "actualLabelIn", "addActualBtn", "actual");
 
 // ===================== library list =====================
 // All library rendering is done via textContent / DOM nodes, never
