@@ -3416,15 +3416,24 @@ function renderWeekGrid() {
       block.style.right = "auto";
       block.style.width = "calc(" + widthPct + "% - 4px)";
 
-      const tEl = document.createElement("div");
-      tEl.className = "wg-ev-time";
-      tEl.textContent = fmtTime12(item.ev.start) + (item.ev.end ? "–" + fmtTime12(item.ev.end) : "");
+      const timeLabel = fmtTime12(item.ev.start) + (item.ev.end ? "–" + fmtTime12(item.ev.end) : "");
       const nEl = document.createElement("div");
       nEl.className = "wg-ev-title";
-      nEl.textContent = statusGlyph(item.ev) + item.ev.title;
-      // Only show time line if the block is tall enough to fit both lines.
-      if (hPx >= 30) block.appendChild(tEl);
-      block.appendChild(nEl);
+      if (hPx >= 30) {
+        // Tall enough for two lines: time above, title below.
+        const tEl = document.createElement("div");
+        tEl.className = "wg-ev-time";
+        tEl.textContent = timeLabel;
+        nEl.textContent = statusGlyph(item.ev) + item.ev.title;
+        block.appendChild(tEl);
+        block.appendChild(nEl);
+      } else {
+        // Too short to stack — fold the time into the single title line
+        // (which truncates with an ellipsis) rather than dropping it, so
+        // short events still show when they're happening.
+        nEl.textContent = timeLabel + " " + statusGlyph(item.ev) + item.ev.title;
+        block.appendChild(nEl);
+      }
       block.title = fmtTime12(item.ev.start) + (item.ev.end ? " – " + fmtTime12(item.ev.end) : "") + " · " + item.ev.title;
 
       block.addEventListener("click", (e) => {
